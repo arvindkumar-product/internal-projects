@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reseller Console v2 — Reports · Vini (prototype)</title>
+<!--
+  Prototype for the Reports > Vini section of Reseller Console v2.
+  Purpose: not a clone of the dealer/rooftop-level Vini dashboard (vini-daily-calls.vercel.app) —
+  it re-derives which elements a RESELLER (the middleman between Spyne and their Dealers/Rooftops)
+  actually needs: portfolio health, who needs attention, seat utilization they're paying for,
+  and a path to escalate a problem to Spyne. Numbers are illustrative, built from real ratios
+  observed in the reference dealer report; see reference-docs/prd-reseller-console-v2.md §11/§12
+  for current API status (Reports page API wiring: pending).
+-->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --surface2: #eef1f4;
+  --border: #dde1e7; --text: #1a2230; --muted: #667085;
+  --green: #15803d; --green-dim: #86efac; --green-bg: #e9f8ef;
+  --amber: #b45309; --amber-dim: #fbbf24; --amber-bg: #fdf1de;
+  --red: #dc2626; --red-dim: #fca5a5; --red-bg: #fdecea;
+  --blue: #2563eb; --blue-bg: #e8f0fe;
+  --purple: #7c3aed; --purple-bg: #f2ecfd;
+}
+
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; font-size: 14px; }
+
+/* ── Header ── */
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 18px 32px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.header-left h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+.header-left p { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.header-right { display: flex; gap: 10px; align-items: center; }
+.badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.5px; text-transform: uppercase; }
+.badge-live { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-dim); }
+.badge-date { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+.badge-proto { background: var(--purple-bg); color: var(--purple); border: 1px solid #d8c8fa; }
+
+/* ── Filter bar ── */
+.filter-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 32px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.filter-pill { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+.filter-pill .chev { color: var(--muted); font-size: 10px; }
+.filter-note { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+/* ── Tab strip ── */
+.tab-strip { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 32px; display: flex; position: sticky; top: 0; z-index: 100; overflow-x: auto; }
+.tab-btn { padding: 14px 22px; font-size: 13px; font-weight: 600; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: color 0.15s; letter-spacing: 0.2px; white-space: nowrap; }
+.tab-btn:hover, .tab-btn:focus-visible { color: var(--text); }
+.tab-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.tab-btn.active { color: var(--text); border-bottom-color: var(--blue); }
+.tab-pill { display: inline-block; font-size: 10px; background: var(--surface2); color: var(--muted); border-radius: 10px; padding: 1px 7px; margin-left: 6px; font-weight: 700; vertical-align: middle; }
+.tab-btn.active .tab-pill { background: var(--blue-bg); color: var(--blue); }
+.tab-pill.alert { background: var(--red-bg); color: var(--red); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── Page / layout ── */
+.page { max-width: 1240px; margin: 0 auto; padding: 28px 32px 60px; overflow-x: auto; }
+.section-header { display: flex; align-items: baseline; gap: 12px; margin: 40px 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.section-header h2 { font-size: 15px; font-weight: 700; }
+.section-header span { font-size: 12px; color: var(--muted); }
+.sub-section-header { display: flex; align-items: baseline; gap: 10px; margin: 28px 0 12px; }
+.sub-section-header h3 { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+.card-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+
+/* ── KPI hero cards ── */
+.kpi-hero { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+.kpi-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 12px; }
+.kpi-value { font-size: 36px; font-weight: 800; line-height: 1; letter-spacing: -1.5px; font-variant-numeric: tabular-nums; }
+.kpi-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.kpi-trend { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; margin-top: 10px; padding: 3px 9px; border-radius: 20px; }
+.trend-up { background: var(--green-bg); color: var(--green); }
+.trend-warn { background: var(--amber-bg); color: var(--amber); }
+.trend-down { background: var(--red-bg); color: var(--red); }
+
+/* ── Progress / utilization bars ── */
+.prog-bar-wrap { margin: 10px 0; }
+.prog-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.prog-label .prog-name { color: var(--text); font-weight: 600; }
+.prog-label .prog-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+.prog-track { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 4px; }
+.prog-caption { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* ── Metric rows ── */
+.metric-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.metric-row:last-child { border-bottom: none; }
+.metric-name { font-size: 13px; color: var(--muted); }
+.metric-val { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.metric-val.green { color: var(--green); } .metric-val.amber { color: var(--amber); } .metric-val.red { color: var(--red); } .metric-val.white { color: var(--text); }
+
+.stat-block { text-align: center; padding: 12px 0; }
+.stat-num { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+canvas { max-width: 100%; }
+.chart-wrap { position: relative; }
+.footnote { font-size: 11px; color: var(--muted); margin-top: 10px; font-style: italic; }
+.illustrative { font-size: 10px; color: var(--purple); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: var(--purple-bg); padding: 1px 6px; border-radius: 4px; }
+
+/* ── Data tables ── */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th { padding: 9px 14px; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid var(--border); background: var(--surface2); text-align: left; white-space: nowrap; }
+.data-table th.right { text-align: right; }
+.data-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
+.data-table td.right { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table tr:hover > td { background: rgba(37,99,235,0.03); }
+.data-table tr.total-row td { background: var(--surface2); font-weight: 700; border-top: 2px solid var(--border); }
+.data-table tr.subrow td { background: rgba(15,23,42,0.015); font-size: 12px; }
+.data-table tr.subrow .name-cell { padding-left: 34px; color: var(--muted); }
+.dealer-name { font-weight: 700; color: var(--text); font-size: 13px; }
+.dealer-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.expand-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 11px; margin-right: 8px; width: 16px; display: inline-block; transition: transform .15s; }
+.expand-btn.open { transform: rotate(90deg); color: var(--blue); }
+.rooftop-row-hidden { display: none; }
+.flag-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.flag-dot.red { background: var(--red); box-shadow: 0 0 0 3px var(--red-bg); }
+.flag-dot.amber { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-bg); }
+
+/* ── Health chip ── */
+.health-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+.health-good { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-dim); }
+.health-watch { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-dim); }
+.health-risk { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-dim); }
+
+/* ── Agent-type comparison cards ── */
+.agent-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+.agent-card .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+.agent-card h4 { font-size: 14px; font-weight: 700; display: flex; align-items: center; }
+.agent-card .why { font-size: 12px; color: var(--muted); background: var(--surface2); border-radius: 8px; padding: 10px 12px; margin-top: 6px; border-left: 3px solid var(--blue); }
+
+/* ── Escalation feed ── */
+.escalate-item { display: flex; gap: 16px; padding: 16px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--border); margin-bottom: 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+.escalate-item.sev-high { border-left-color: var(--red); }
+.escalate-item.sev-med { border-left-color: var(--amber); }
+.escalate-item.sev-low { border-left-color: var(--blue); }
+.escalate-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+.escalate-body { flex: 1; min-width: 0; }
+.escalate-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 5px; flex-wrap: wrap; }
+.escalate-title { font-weight: 700; font-size: 13.5px; }
+.escalate-desc { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.sev-tag { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+.sev-tag.sev-high { background: var(--red-bg); color: var(--red); }
+.sev-tag.sev-med { background: var(--amber-bg); color: var(--amber); }
+.sev-tag.sev-low { background: var(--blue-bg); color: var(--blue); }
+.escalate-actions { display: flex; gap: 8px; margin-top: 10px; }
+.btn { font-size: 12px; font-weight: 700; padding: 7px 13px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; }
+.btn:hover { border-color: var(--blue); color: var(--blue); }
+.btn.primary { background: var(--blue-bg); border-color: #bfdbfe; color: var(--blue); }
+.btn.primary:hover { background: #d8e6fd; }
+.status-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.4px; }
+.status-open { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+
+@media (max-width: 980px) {
+  .grid-4, .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .grid-2 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <h1>Reports · Vini — Reseller Console v2</h1>
+    <p>Your Dealer &amp; Rooftop portfolio, rolled up · Sales &amp; Service · Inbound &amp; Outbound</p>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-proto">Prototype</span>
+    <span class="badge badge-live">● Live</span>
+    <span class="badge badge-date">Last 30 days · as of 9 Jul 2026</span>
+  </div>
+</div>
+
+<!-- FILTER BAR -->
+<div class="filter-bar">
+  <span class="filter-pill">📅 Last 30 days <span class="chev">▾</span></span>
+  <span class="filter-pill">🧩 Product: Vini <span class="chev">▾</span></span>
+  <span class="filter-pill">🏢 Dealer: All 5 dealers <span class="chev">▾</span></span>
+  <span class="filter-pill">🎧 Agent type: All 4 <span class="chev">▾</span></span>
+  <span class="filter-note">Per PRD §11 — filterable by period, product, and dealer</span>
+</div>
+
+<!-- TAB STRIP -->
+<div class="tab-strip">
+  <button class="tab-btn active" onclick="showTab('tab-portfolio', this)">Portfolio Overview</button>
+  <button class="tab-btn" onclick="showTab('tab-dealer', this)">By Dealer <span class="tab-pill">5</span></button>
+  <button class="tab-btn" onclick="showTab('tab-agent', this)">By Agent Type <span class="tab-pill">4</span></button>
+  <button class="tab-btn" onclick="showTab('tab-escalate', this)">Attention &amp; Escalations <span class="tab-pill alert">4</span></button>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     TAB 1 — PORTFOLIO OVERVIEW
+══════════════════════════════════════════════════════════ -->
+<div id="tab-portfolio" class="tab-content active">
+<div class="page">
+
+  <div class="grid-4">
+    <div class="kpi-hero">
+      <div class="kpi-label">Leads Attempted</div>
+      <div class="kpi-value" style="color:var(--blue)">82,529</div>
+      <div class="kpi-sub">across every rooftop in your 5 dealers</div>
+      <div class="kpi-trend trend-up">↑ 6% vs prior 30 days</div>
+    </div>
+    <div class="kpi-hero">
+      <div class="kpi-label">Qualified Leads</div>
+      <div class="kpi-value" style="color:var(--purple)">3,428</div>
+      <div class="kpi-sub">4.2% of leads attempted</div>
+      <div class="kpi-trend trend-up">↑ 3%</div>
+    </div>
+    <div class="kpi-hero">
+      <div class="kpi-label">Appointments Booked</div>
+      <div class="kpi-value" style="color:var(--green)">721</div>
+      <div class="kpi-sub">21.0% of qualified (ABR)</div>
+      <div class="kpi-trend trend-warn">↓ 2pp ABR vs prior period</div>
+    </div>
+    <div class="kpi-hero">
+      <div class="kpi-label">Dealers needing attention</div>
+      <div class="kpi-value" style="color:var(--red)">2 <span style="font-size:16px; color:var(--muted); font-weight:600">of 5</span></div>
+      <div class="kpi-sub">see Attention &amp; Escalations tab</div>
+      <div class="kpi-trend trend-warn">2 new this period</div>
+    </div>
+  </div>
+
+  <!-- Trend + utilization -->
+  <div class="grid-2" style="margin-top:14px">
+    <div class="card">
+      <div class="card-title">Leads → Qualified → Appointments, weekly<span class="illustrative">illustrative trend</span></div>
+      <div class="chart-wrap" style="height:210px"><canvas id="trendChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Agent-seat utilization<span class="illustrative">illustrative</span></div>
+      <p class="footnote" style="margin-top:-6px; margin-bottom:10px">Of the agent seats you've allocated to dealers, how many actually ran a conversation this period — idle seats are cost with no return.</p>
+      <div class="prog-bar-wrap">
+        <div class="prog-label"><span class="prog-name">Sales Inbound</span><span class="prog-val" style="color:var(--green)">88%</span></div>
+        <div class="prog-track"><div class="prog-fill" style="width:88%; background:var(--green)"></div></div>
+      </div>
+      <div class="prog-bar-wrap">
+        <div class="prog-label"><span class="prog-name">Sales Outbound</span><span class="prog-val" style="color:var(--green)">83%</span></div>
+        <div class="prog-track"><div class="prog-fill" style="width:83%; background:var(--green)"></div></div>
+      </div>
+      <div class="prog-bar-wrap">
+        <div class="prog-label"><span class="prog-name">Service Inbound</span><span class="prog-val" style="color:var(--green)">92%</span></div>
+        <div class="prog-track"><div class="prog-fill" style="width:92%; background:var(--green)"></div></div>
+      </div>
+      <div class="prog-bar-wrap">
+        <div class="prog-label"><span class="prog-name">Service Outbound</span><span class="prog-val" style="color:var(--red)">38%</span></div>
+        <div class="prog-track"><div class="prog-fill" style="width:38%; background:var(--red)"></div></div>
+        <div class="prog-caption">62% of the Service Outbound seats you're paying for sat idle this period — see Escalations.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Headlines -->
+  <div class="sub-section-header"><h3>This period's headlines</h3></div>
+  <div class="card">
+    <div class="metric-row"><span class="metric-name">🏆 Best-performing dealer</span><span class="metric-val green">Brandon Steven Motors — 23.3% ABR</span></div>
+    <div class="metric-row"><span class="metric-name">⚠️ Weakest dealer in your book</span><span class="metric-val amber">Grand Motorcars — 9.1% ABR, sub-1.0× value on every agent</span></div>
+    <div class="metric-row"><span class="metric-name">📈 Strongest motion</span><span class="metric-val green">Service Inbound — 17.5% conversion on real call volume</span></div>
+    <div class="metric-row"><span class="metric-name">📉 Weakest motion</span><span class="metric-val red">Service Outbound — 0.07% conversion, seats mostly idle</span></div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     TAB 2 — BY DEALER
+══════════════════════════════════════════════════════════ -->
+<div id="tab-dealer" class="tab-content">
+<div class="page">
+
+  <div class="section-header">
+    <h2>By Dealer</h2>
+    <span>ranked by ABR · expand a dealer to see its rooftops · click a rooftop to open its Vini scorecard</span>
+  </div>
+
+  <div class="card" style="padding:0; overflow-x:auto">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:28px"></th>
+          <th>Dealer</th>
+          <th class="right">Rooftops</th>
+          <th class="right">Leads Attempted</th>
+          <th class="right">Qualified</th>
+          <th class="right">Appts</th>
+          <th class="right">Conv. Rate</th>
+          <th class="right">ABR</th>
+          <th>Health</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr onclick="toggleRows('bsm')" style="cursor:pointer">
+          <td><span class="expand-btn" id="bsm-btn">▶</span></td>
+          <td><div class="dealer-name">Brandon Steven Motors</div><div class="dealer-meta">Service-heavy book · 3 rooftops</div></td>
+          <td class="right">3</td><td class="right">8,760</td><td class="right">1,784</td><td class="right">415</td>
+          <td class="right">4.74%</td><td class="right" style="color:var(--green); font-weight:700">23.3%</td>
+          <td><span class="health-chip health-good">● Healthy</span></td>
+        </tr>
+        <tr class="subrow rooftop-row-hidden bsm-row"><td></td><td class="name-cell">Covina Kia · Service Inbound</td><td></td><td class="right">1,154</td><td class="right">939</td><td class="right">215</td><td class="right">22.9%</td><td class="right">22.9%</td><td></td></tr>
+        <tr class="subrow rooftop-row-hidden bsm-row"><td></td><td class="name-cell">Honda DTLA · Service Inbound</td><td></td><td class="right">1,121</td><td class="right">770</td><td class="right">184</td><td class="right">23.9%</td><td class="right">23.9%</td><td></td></tr>
+        <tr class="subrow rooftop-row-hidden bsm-row"><td></td><td class="name-cell"><span class="flag-dot red"></span>Covina Kia · Sales Outbound</td><td></td><td class="right">4,096</td><td class="right">35</td><td class="right">0</td><td class="right">0.0%</td><td class="right">0.0%</td><td><span class="health-chip health-risk">Escalated</span></td></tr>
+        <tr class="subrow rooftop-row-hidden bsm-row"><td></td><td class="name-cell">Honda Reseda · Service Outbound</td><td></td><td class="right">2,389</td><td class="right">40</td><td class="right">16</td><td class="right">0.67%</td><td class="right">40.0%</td><td></td></tr>
+
+        <tr onclick="toggleRows('cr')" style="cursor:pointer">
+          <td><span class="expand-btn" id="cr-btn">▶</span></td>
+          <td><div class="dealer-name">Car Revolution</div><div class="dealer-meta">Sales-only in current sample · 2 rooftops</div></td>
+          <td class="right">2</td><td class="right">16,001</td><td class="right">435</td><td class="right">89</td>
+          <td class="right">0.56%</td><td class="right" style="color:var(--green); font-weight:700">20.5%</td>
+          <td><span class="health-chip health-good">● Healthy</span></td>
+        </tr>
+        <tr class="subrow rooftop-row-hidden cr-row"><td></td><td class="name-cell">Revolution Cars of Avenel · Sales Inbound</td><td></td><td class="right">2,030</td><td class="right">258</td><td class="right">69</td><td class="right">3.4%</td><td class="right">26.7%</td><td></td></tr>
+        <tr class="subrow rooftop-row-hidden cr-row"><td></td><td class="name-cell">Revolution Cars of Avenel · Sales Outbound</td><td></td><td class="right">10,082</td><td class="right">120</td><td class="right">19</td><td class="right">0.19%</td><td class="right">15.8%</td><td></td></tr>
+        <tr class="subrow rooftop-row-hidden cr-row"><td></td><td class="name-cell">Pointe Buick GMC · Sales Outbound</td><td></td><td class="right">3,889</td><td class="right">57</td><td class="right">1</td><td class="right">0.03%</td><td class="right">1.8%</td><td></td></tr>
+
+        <tr onclick="toggleRows('da')" style="cursor:pointer" class="open">
+          <td><span class="expand-btn open" id="da-btn">▶</span></td>
+          <td><div class="dealer-name">Dream Automotive</div><div class="dealer-meta">4 rooftops · Service Inbound not yet visible for this dealer</div></td>
+          <td class="right">4</td><td class="right">38,556</td><td class="right">1,015</td><td class="right">196</td>
+          <td class="right">0.51%</td><td class="right" style="color:var(--amber); font-weight:700">19.3%</td>
+          <td><span class="health-chip health-watch">● Watch</span></td>
+        </tr>
+        <tr class="subrow da-row"><td></td><td class="name-cell">Dream Lawrence Nissan · Sales Inbound</td><td></td><td class="right">1,853</td><td class="right">233</td><td class="right">61</td><td class="right">3.3%</td><td class="right">26.2%</td><td></td></tr>
+        <tr class="subrow da-row"><td></td><td class="name-cell">Dream Nissan Midwest · Sales Inbound</td><td></td><td class="right">1,783</td><td class="right">240</td><td class="right">56</td><td class="right">3.1%</td><td class="right">23.3%</td><td></td></tr>
+        <tr class="subrow da-row"><td></td><td class="name-cell">Dream Nissan Kansas City · Sales Inbound</td><td></td><td class="right">1,530</td><td class="right">174</td><td class="right">51</td><td class="right">3.3%</td><td class="right">29.3%</td><td></td></tr>
+        <tr class="subrow da-row"><td></td><td class="name-cell">Dream Nissan Midwest · Sales Outbound</td><td></td><td class="right">3,999</td><td class="right">132</td><td class="right">11</td><td class="right">0.28%</td><td class="right">8.3%</td><td></td></tr>
+        <tr class="subrow da-row"><td></td><td class="name-cell">Dream Lawrence Nissan · Sales Outbound</td><td></td><td class="right">3,858</td><td class="right">138</td><td class="right">8</td><td class="right">0.21%</td><td class="right">5.8%</td><td></td></tr>
+        <tr class="subrow da-row"><td></td><td class="name-cell">Dream Nissan Kansas City · Sales Outbound</td><td></td><td class="right">3,512</td><td class="right">88</td><td class="right">9</td><td class="right">0.26%</td><td class="right">10.2%</td><td></td></tr>
+        <tr class="subrow da-row"><td></td><td class="name-cell"><span class="flag-dot amber"></span>Dream Nissan Legends · Service Outbound (11d window)</td><td></td><td class="right">11,601</td><td class="right">8</td><td class="right">0</td><td class="right">0.0%</td><td class="right">0.0%</td><td><span class="health-chip health-watch">Data flag</span></td></tr>
+        <tr class="subrow da-row"><td></td><td class="name-cell"><span class="flag-dot amber"></span>Dream Nissan Legends · Service Outbound (10d window — duplicate record?)</td><td></td><td class="right">2,713</td><td class="right">5</td><td class="right">0</td><td class="right">0.0%</td><td class="right">0.0%</td><td><span class="health-chip health-watch">Data flag</span></td></tr>
+        <tr class="subrow da-row"><td></td><td class="name-cell">Dream Nissan Midwest · Service Outbound</td><td></td><td class="right">10,420</td><td class="right">2</td><td class="right">0</td><td class="right">0.0%</td><td class="right">0.0%</td><td></td></tr>
+
+        <tr onclick="toggleRows('sam')" style="cursor:pointer">
+          <td><span class="expand-btn" id="sam-btn">▶</span></td>
+          <td><div class="dealer-name">Super Autos Miami</div><div class="dealer-meta">Standalone · 1 rooftop</div></td>
+          <td class="right">1</td><td class="right">8,876</td><td class="right">139</td><td class="right">16</td>
+          <td class="right">0.18%</td><td class="right" style="color:var(--amber); font-weight:700">11.5%</td>
+          <td><span class="health-chip health-watch">● Watch</span></td>
+        </tr>
+        <tr class="subrow rooftop-row-hidden sam-row"><td></td><td class="name-cell"><span class="flag-dot amber"></span>Super Autos Miami · Sales Inbound</td><td></td><td class="right">2,787</td><td class="right">78</td><td class="right">9</td><td class="right">0.3%</td><td class="right">11.5%</td><td><span class="health-chip health-watch">Doesn't match scorecard</span></td></tr>
+        <tr class="subrow rooftop-row-hidden sam-row"><td></td><td class="name-cell">Super Autos Miami · Sales Outbound</td><td></td><td class="right">6,089</td><td class="right">61</td><td class="right">7</td><td class="right">0.11%</td><td class="right">11.5%</td><td></td></tr>
+
+        <tr onclick="toggleRows('gm')" style="cursor:pointer">
+          <td><span class="expand-btn" id="gm-btn">▶</span></td>
+          <td><div class="dealer-name">Grand Motorcars <span style="color:var(--muted); font-weight:400">("Autoplex")</span></div><div class="dealer-meta">Standalone · 1 rooftop</div></td>
+          <td class="right">1</td><td class="right">10,336</td><td class="right">55</td><td class="right">5</td>
+          <td class="right">0.05%</td><td class="right" style="color:var(--red); font-weight:700">9.1%</td>
+          <td><span class="health-chip health-risk">● At risk</span></td>
+        </tr>
+        <tr class="subrow rooftop-row-hidden gm-row"><td></td><td class="name-cell">Autoplex · Sales Inbound</td><td></td><td class="right">2,117</td><td class="right">28</td><td class="right">3</td><td class="right">0.14%</td><td class="right">10.7%</td><td></td></tr>
+        <tr class="subrow rooftop-row-hidden gm-row"><td></td><td class="name-cell">Autoplex · Sales Outbound</td><td></td><td class="right">8,219</td><td class="right">27</td><td class="right">2</td><td class="right">0.02%</td><td class="right">7.4%</td><td></td></tr>
+
+        <tr class="total-row">
+          <td></td><td>Portfolio total (5 dealers, 11 rooftops)</td>
+          <td class="right">11</td><td class="right">82,529</td><td class="right">3,428</td><td class="right">721</td>
+          <td class="right">0.87%</td><td class="right">21.0%</td><td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="footnote">Rows without visible data for an agent type aren't shown as zero — they're simply not yet in this rollup. Dream Automotive's Dream Nissan Legends rooftop appears twice with overlapping windows; treat as one rooftop, flagged for Spyne Ops to de-duplicate at the source.</p>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     TAB 3 — BY AGENT TYPE
+══════════════════════════════════════════════════════════ -->
+<div id="tab-agent" class="tab-content">
+<div class="page">
+
+  <div class="section-header">
+    <h2>By Agent Type</h2>
+    <span>the same portfolio, sliced by what each agent type is actually doing for you</span>
+  </div>
+
+  <div class="grid-2">
+    <div class="agent-card">
+      <h4><span class="dot" style="background:var(--amber)"></span>Sales Inbound</h4>
+      <div class="metric-row"><span class="metric-name">Dealers covered</span><span class="metric-val white">4 of 5</span></div>
+      <div class="metric-row"><span class="metric-name">Leads Attempted</span><span class="metric-val white">12,100</span></div>
+      <div class="metric-row"><span class="metric-name">Qualified</span><span class="metric-val white">1,011</span></div>
+      <div class="metric-row"><span class="metric-name">Appointments</span><span class="metric-val white">249</span></div>
+      <div class="metric-row"><span class="metric-name">Conv. Rate / ABR</span><span class="metric-val green">2.06% / 24.6%</span></div>
+      <div class="why">Your best-converting inbound motion — buyers calling in are already warm. Worth pointing new dealers here first if they're hesitant about outbound.</div>
+    </div>
+
+    <div class="agent-card">
+      <h4><span class="dot" style="background:var(--purple)"></span>Sales Outbound</h4>
+      <div class="metric-row"><span class="metric-name">Dealers covered</span><span class="metric-val white">5 of 5</span></div>
+      <div class="metric-row"><span class="metric-name">Leads Attempted</span><span class="metric-val white">43,744</span></div>
+      <div class="metric-row"><span class="metric-name">Qualified</span><span class="metric-val white">658</span></div>
+      <div class="metric-row"><span class="metric-name">Appointments</span><span class="metric-val white">57</span></div>
+      <div class="metric-row"><span class="metric-name">Conv. Rate / ABR</span><span class="metric-val amber">0.13% / 8.7%</span></div>
+      <div class="why">Highest volume, lowest yield — expected for cold outbound, but Covina Kia's 0-appointment result (see Escalations) is dragging the average down further than the motion alone explains.</div>
+    </div>
+
+    <div class="agent-card">
+      <h4><span class="dot" style="background:var(--green)"></span>Service Inbound</h4>
+      <div class="metric-row"><span class="metric-name">Dealers covered</span><span class="metric-val white">1 of 5</span></div>
+      <div class="metric-row"><span class="metric-name">Leads Attempted</span><span class="metric-val white">2,275</span></div>
+      <div class="metric-row"><span class="metric-name">Qualified</span><span class="metric-val white">1,709</span></div>
+      <div class="metric-row"><span class="metric-name">Appointments</span><span class="metric-val white">399</span></div>
+      <div class="metric-row"><span class="metric-name">Conv. Rate / ABR</span><span class="metric-val green">17.5% / 23.3%</span></div>
+      <div class="why">Your best motion overall, but only live at Brandon Steven Motors today. A natural upsell conversation for the other 4 dealers, who are all running Sales but not Service Inbound yet.</div>
+    </div>
+
+    <div class="agent-card">
+      <h4><span class="dot" style="background:var(--blue)"></span>Service Outbound</h4>
+      <div class="metric-row"><span class="metric-name">Dealers covered</span><span class="metric-val white">2 of 5</span></div>
+      <div class="metric-row"><span class="metric-name">Leads Attempted</span><span class="metric-val white">24,410</span></div>
+      <div class="metric-row"><span class="metric-name">Qualified</span><span class="metric-val white">50</span></div>
+      <div class="metric-row"><span class="metric-name">Appointments</span><span class="metric-val white">16</span></div>
+      <div class="metric-row"><span class="metric-name">Conv. Rate / ABR</span><span class="metric-val red">0.07% / 32.0%*</span></div>
+      <div class="why">*ABR looks fine on paper but is computed from only 50 qualified leads out of 24,410 attempted — mostly an SMS blast at Dream Automotive with zero bookings. Don't sell more of this until utilization &amp; conversion improve.</div>
+    </div>
+  </div>
+
+  <div class="sub-section-header"><h3>Side-by-side</h3></div>
+  <div class="card">
+    <div class="chart-wrap" style="height:220px"><canvas id="agentTypeChart"></canvas></div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     TAB 4 — ATTENTION & ESCALATIONS
+══════════════════════════════════════════════════════════ -->
+<div id="tab-escalate" class="tab-content">
+<div class="page">
+
+  <div class="section-header">
+    <h2>Attention &amp; Escalations</h2>
+    <span>what needs your call this week, and what needs Spyne's</span>
+  </div>
+
+  <div class="escalate-item sev-high">
+    <div class="escalate-icon">🚫</div>
+    <div class="escalate-body">
+      <div class="escalate-top">
+        <div class="escalate-title">Covina Kia — Sales Outbound — 0 appointments on 4,096 worked leads</div>
+        <span class="sev-tag sev-high">High</span>
+      </div>
+      <div class="escalate-desc">Brandon Steven Motors' outbound agent qualified 35 leads over 30 days but converted none of them to a booking — that's a funnel break, not a lead-quality issue. Worth escalating before the dealer notices and asks why they're paying for it.</div>
+      <div class="escalate-actions">
+        <button class="btn primary">Raise with Spyne support</button>
+        <button class="btn">View rooftop detail</button>
+        <span class="status-pill status-open" style="margin-left:auto; align-self:center">Open</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="escalate-item sev-high">
+    <div class="escalate-icon">📉</div>
+    <div class="escalate-body">
+      <div class="escalate-top">
+        <div class="escalate-title">Grand Motorcars ("Autoplex") — sub-1.0× value on every agent type</div>
+        <span class="sev-tag sev-high">High</span>
+      </div>
+      <div class="escalate-desc">Both Sales Inbound and Sales Outbound are underwater at this dealer, and it's the lowest ABR in your whole book (9.1%). This reads like an account-health problem, not a channel problem — worth a call before renewal.</div>
+      <div class="escalate-actions">
+        <button class="btn primary">Schedule dealer health check</button>
+        <button class="btn">View dealer detail</button>
+        <span class="status-pill status-open" style="margin-left:auto; align-self:center">Open</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="escalate-item sev-med">
+    <div class="escalate-icon">🧬</div>
+    <div class="escalate-body">
+      <div class="escalate-top">
+        <div class="escalate-title">Dream Nissan Legends appears as two rooftop records</div>
+        <span class="sev-tag sev-med">Medium</span>
+      </div>
+      <div class="escalate-desc">Two overlapping activity windows (11 days and 10 days) for what looks like one physical location under Dream Automotive. Numbers below either record shouldn't be trusted for billing or reporting until this is merged at the source.</div>
+      <div class="escalate-actions">
+        <button class="btn primary">Escalate to Spyne Ops — data issue</button>
+        <span class="status-pill status-open" style="margin-left:auto; align-self:center">Open</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="escalate-item sev-med">
+    <div class="escalate-icon">🪫</div>
+    <div class="escalate-body">
+      <div class="escalate-top">
+        <div class="escalate-title">Service Outbound seats are running at ~38% utilization fleet-wide</div>
+        <span class="sev-tag sev-med">Medium</span>
+      </div>
+      <div class="escalate-desc">You're paying for Service Outbound capacity that mostly isn't converting. Before pitching this add-on to more dealers, worth understanding with Spyne whether it's a script/targeting issue or a channel that just underperforms at this stage.</div>
+      <div class="escalate-actions">
+        <button class="btn primary">Ask Spyne for a Service Outbound review</button>
+        <span class="status-pill status-open" style="margin-left:auto; align-self:center">Open</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="escalate-item sev-low">
+    <div class="escalate-icon">🔍</div>
+    <div class="escalate-body">
+      <div class="escalate-top">
+        <div class="escalate-title">Super Autos Miami's numbers here don't match its own Vini scorecard</div>
+        <span class="sev-tag sev-low">Low</span>
+      </div>
+      <div class="escalate-desc">Sales Inbound qualified/appointments differ between this rollup (78 / 9) and the canonical per-rooftop scorecard (55 / 10) for roughly the same window. Likely a data-scope difference on Spyne's side — confirm which number to trust before sharing with this dealer.</div>
+      <div class="escalate-actions">
+        <button class="btn">Ask Spyne which number is correct</button>
+        <span class="status-pill status-open" style="margin-left:auto; align-self:center">Open</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<script>
+const GREEN = '#15803d', AMBER = '#b45309', RED = '#dc2626', BLUE = '#2563eb', PURPLE = '#7c3aed', MUTED = '#667085';
+
+function showTab(tabId, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+  if (tabId === 'tab-agent' && !window._agentInit) { window._agentInit = true; initAgentChart(); }
+}
+
+function toggleRows(key) {
+  const rows = document.querySelectorAll('.' + key + '-row');
+  const btn = document.getElementById(key + '-btn');
+  const willOpen = rows.length && rows[0].classList.contains('rooftop-row-hidden');
+  rows.forEach(r => r.classList.toggle('rooftop-row-hidden', !willOpen ? true : false));
+  btn.classList.toggle('open', willOpen);
+}
+
+/* Dream Automotive starts expanded to demonstrate drill-down on load */
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.da-row').forEach(r => r.classList.remove('rooftop-row-hidden'));
+});
+
+new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels: ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'],
+    datasets: [
+      { label: 'Leads Attempted', data: [18400, 19850, 21600, 22679], borderColor: BLUE, backgroundColor: 'rgba(37,99,235,0.08)', fill: true, tension: 0.4, pointRadius: 4, yAxisID: 'y' },
+      { label: 'Qualified', data: [790, 845, 890, 903], borderColor: PURPLE, tension: 0.4, pointRadius: 4, yAxisID: 'y1' },
+      { label: 'Appointments', data: [165, 178, 188, 190], borderColor: GREEN, tension: 0.4, pointRadius: 4, yAxisID: 'y1' },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { boxWidth: 10, padding: 10, font: { size: 10 } } } },
+    scales: {
+      y: { position: 'left', beginAtZero: true, ticks: { color: MUTED } },
+      y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { color: MUTED } }
+    }
+  }
+});
+
+function initAgentChart() {
+  new Chart(document.getElementById('agentTypeChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Sales Inbound', 'Sales Outbound', 'Service Inbound', 'Service Outbound'],
+      datasets: [
+        { label: 'Conv. Rate %', data: [2.06, 0.13, 17.5, 0.07], backgroundColor: BLUE, borderRadius: 4 },
+        { label: 'ABR %', data: [24.6, 8.7, 23.3, 32.0], backgroundColor: PURPLE, borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { boxWidth: 10, padding: 10, font: { size: 10 } } } },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => v + '%' } } }
+    }
+  });
+}
+</script>
+</body>
+</html>
