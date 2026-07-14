@@ -130,6 +130,8 @@ body {
 }
 .tab-item:hover { color: var(--text); }
 .tab-item--active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-item--disabled { color: #c9cdd4; cursor: not-allowed; }
+.tab-item--disabled:hover { color: #c9cdd4; }
 .tab-panel { display: none; }
 .tab-panel--active { display: block; }
 
@@ -348,9 +350,7 @@ canvas { max-width: 100%; }
 
   <!-- TAB BAR -->
   <div class="tab-bar">
-    <button class="tab-item" id="tab-btn-studio" onclick="showTab('studio')" style="
-    display: none;
-">Studio</button>
+    <button class="tab-item tab-item--disabled" id="tab-btn-studio" disabled title="Disabled for this walkthrough — VINI is the focus">Studio</button>
     <button class="tab-item tab-item--active" id="tab-btn-vini" onclick="showTab('vini')">VINI</button>
   </div>
 
@@ -358,7 +358,7 @@ canvas { max-width: 100%; }
   <!-- ══════════════════════════════════════════════════════════
        STUDIO TAB — light rebuild of the existing live tab
   ══════════════════════════════════════════════════════════ -->
-  <div id="panel-studio" class="tab-panel tab-panel--active">
+  <div id="panel-studio" class="tab-panel">
 
     <div class="grid-4">
       <div class="kpi-card kpi-card--warn">
@@ -451,7 +451,7 @@ canvas { max-width: 100%; }
   <!-- ══════════════════════════════════════════════════════════
        VINI TAB — the actual scope of this prototype
   ══════════════════════════════════════════════════════════ -->
-  <div id="panel-vini" class="tab-panel">
+  <div id="panel-vini" class="tab-panel tab-panel--active">
 
     <!-- Filter row -->
     <div class="filter-row">
@@ -792,6 +792,7 @@ function showTab(tab) {
   document.getElementById('tab-btn-studio').classList.toggle('tab-item--active', tab === 'studio');
   document.getElementById('tab-btn-vini').classList.toggle('tab-item--active', tab === 'vini');
   if (tab === 'vini' && !window._viniInit) { window._viniInit = true; initViniChart(); }
+  if (tab === 'studio' && !window._studioInit) { window._studioInit = true; initStudioChart(); }
 }
 
 function toggleRows(key) {
@@ -812,9 +813,12 @@ function setStudioChart(view, btn) {
 
 const GREEN = '#12b76a', AMBER = '#f79009', BLUE = '#0ea5e9', PURPLE = '#4600f2', MUTED = '#6b7280', SUCCESS='#027a48', ERROR='#d13313';
 
-/* Dream Automotive starts expanded to demonstrate drill-down on load */
+/* Dream Automotive starts expanded to demonstrate drill-down on load.
+   VINI is the default (and only enabled) tab, so its chart initializes immediately. */
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.da-row').forEach(r => r.classList.remove('rooftop-row-hidden'));
+  window._viniInit = true;
+  initViniChart();
 });
 
 /* ── Studio chart ── */
@@ -825,26 +829,32 @@ const STUDIO_SERIES = {
   video:   [90, 95, 100, 115],
   spin360: [410, 425, 460, 505],
 };
-const studioChart = new Chart(document.getElementById('studioChart'), {
-  type: 'bar',
-  data: { labels: STUDIO_LABELS, datasets: [{ label: 'Total', data: STUDIO_SERIES.total, backgroundColor: PURPLE, borderRadius: 4 }] },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: { y: { beginAtZero: true, ticks: { color: MUTED } }, x: { ticks: { color: MUTED } } }
-  }
-});
+/* Studio tab is disabled for this walkthrough and hidden by default — its charts are
+   built lazily (same pattern VINI used to use) so Chart.js never sizes them against a
+   display:none container. Re-enable the Studio tab button to exercise this again. */
+let studioChart;
+function initStudioChart() {
+  studioChart = new Chart(document.getElementById('studioChart'), {
+    type: 'bar',
+    data: { labels: STUDIO_LABELS, datasets: [{ label: 'Total', data: STUDIO_SERIES.total, backgroundColor: PURPLE, borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { color: MUTED } }, x: { ticks: { color: MUTED } } }
+    }
+  });
 
-new Chart(document.getElementById('studioDonut'), {
-  type: 'doughnut',
-  data: {
-    labels: ['Image', '360', 'Video'],
-    datasets: [{ data: [8200, 1800, 400], backgroundColor: [GREEN, BLUE, AMBER], borderWidth: 0 }]
-  },
-  options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { display: false } } }
-});
+  new Chart(document.getElementById('studioDonut'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Image', '360', 'Video'],
+      datasets: [{ data: [8200, 1800, 400], backgroundColor: [GREEN, BLUE, AMBER], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { display: false } } }
+  });
+}
 
-/* ── VINI funnel chart (lazy init on first tab open) ── */
+/* ── VINI funnel chart (VINI is the default tab, so init it on load) ── */
 function initViniChart() {
   new Chart(document.getElementById('funnelChart'), {
     type: 'line',
