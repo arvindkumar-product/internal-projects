@@ -16,6 +16,10 @@ Sales admins currently configure Studio pricing for reseller contracts through t
 
 If admins configure Studio pricing (products, VIN-tier slabs, commitment, add-ons) through a structured console form instead of Word, pricing errors will drop and contracts will accurately reflect billing math, because slab lookups, bi-directional discount calculation, and fee totals are enforced by the system instead of manual arithmetic.
 
+## Product Summary
+
+A console form lets a sales admin configure Studio pricing for a reseller — choose Usage or Monthly pricing, set VIN-tier rates and discounts per product, pick a commitment and add-ons — and see it combine with Vini's pricing into one accurate Billing Summary, all without touching a Word document.
+
 ## Scope
 
 ```productspec-scope
