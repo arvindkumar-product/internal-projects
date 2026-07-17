@@ -2,10 +2,10 @@
 spec_format_version: "0.1"
 title: "Studio-Contract"
 artifact_type: "prd"
-spec_revision: 2
+spec_revision: 3
 author: "ProductSpec.io"
 created_at: "2026-07-09T00:00:00Z"
-updated_at: "2026-07-15T00:00:00Z"
+updated_at: "2026-07-17T00:00:00Z"
 ---
 
 ## Problem
@@ -18,7 +18,7 @@ If admins configure Studio pricing (products, VIN-tier slabs, commitment, add-on
 
 ## Product Summary
 
-A console form lets a sales admin configure Studio pricing for a reseller — choose Usage or Monthly pricing, set VIN-tier rates and discounts per product, pick a commitment and add-ons — and see it combine with Vini's pricing into one accurate Billing Summary, all without touching a Word document. This covers the full contract lifecycle for reseller customers: create, save as draft, generate the contract PDF, and amend an existing contract.
+A console form lets a sales admin configure Studio pricing for a reseller — choose Usage or Monthly pricing, set VIN-tier rates and discounts per product, pick a commitment and add-ons — and see it combine with Vini's pricing into one accurate Billing Summary, all without touching a Word document. This covers the full contract lifecycle for reseller customers: create, save as draft, generate the contract PDF, and amend an existing contract. Beyond the contract itself, each Studio product carries a monthly VIN wallet at the Reseller level that drives actual billing (minimum-commitment floor, rollover, overage), while Resellers separately get self-serve control in Partner Console to cap how much of that pool an individual Dealer or Rooftop can draw on.
 
 ## Scope
 
@@ -36,10 +36,19 @@ in:
   - Draft save/resume for a Studio-priced reseller contract, using the existing draft/prefill mechanism unchanged
   - Amendment of an existing reseller contract's Studio pricing, using the existing amendment mechanism unchanged (new linked contract version per amendment; no new approval/re-signature step). A Studio product not previously selected may be newly enabled on amendment; a previously-enabled product cannot be disabled but its VIN count/Offered Price/Disc % remain editable
   - Contract PDF: Commercial Summary renders Studio and Vini as two separate tables (not merged), followed by an Additional Terms section listing selected clauses. Amendment PDFs are a full regenerated document (not a delta/addendum), consistent with the existing PDF pipeline
+  - A monthly VIN credit wallet per Studio product, per Reseller (never per Dealer/Rooftop): topped up each month with the contracted VIN count, debited per request processed, balance allowed to go negative to permit overusage
+  - Usage-model billing: charge the greater of (actual usage × contracted rate) and the minimum commitment floor; if actual usage is below the floor, the unused VIN balance rolls over into next month's wallet
+  - Monthly-model billing: fixed monthly fee regardless of actual usage; wallet resets every cycle with no rollover in either direction
+  - Usage recorded at Reseller, Dealer, and Rooftop granularity (three-level rollup) for reporting and for splitting bills when Spyne invoices Dealers directly, independent of the wallet computation itself
+  - Dealer-direct billing: when Spyne bills each Dealer instead of the Reseller, each Dealer is billed their own actual usage, and any shortfall needed to meet the Reseller's pooled minimum commitment is split across Dealers in proportion to their share of that month's usage
+  - Reseller-facing, self-serve VIN target + configurable overage allowance % (default 20%) per Dealer/Rooftop, set in Partner Console, hard-blocking further processing for that Dealer/Rooftop once usage reaches target × (1 + overage%) — entirely independent of and without effect on the Reseller-level wallet/billing computation
+  - Combined multi-product requests (e.g. Images + Video tour + 360° Spin submitted together): if only one product has reached its Dealer/Rooftop hard cap, only that product is blocked (with an explanatory message) — the rest of the request proceeds normally
 out:
   - Overage billing calculation for VIN-capacity commitments (flagging only, no charge logic)
   - Any new approval/re-signature gate on amendment (none exists today, none is being added)
   - Client-side effective-dating of price changes (see Dependencies — enforced downstream, not in this form)
+  - Any minimum commitment held at the Dealer or Rooftop level — the minimum commitment always stays pooled at the Reseller level only, individual Dealers/Rooftops are never held to their own minimum
+  - Any validation, reference, or display of the contract's committed VIN count inside the Partner Console's Dealer/Rooftop VIN target UI — that allocation is a fully independent number the Reseller chooses, with no tie to what's on the Spyne contract
 cut:
   - Fixed VIN-capacity commitment type (removed after initial build — Commitment is None/Minimum only)
   - Rooftop-based pricing for Studio (explicitly rejected; Studio stays reseller-wide per-VIN)
@@ -66,11 +75,25 @@ cut:
   criterion: Given an existing reseller contract with some Studio products enabled, when a sales admin opens it in amendment mode, then previously-unselected products can be newly enabled, previously-enabled products cannot be disabled but their VIN count/Offered Price/Disc % remain editable, and saving creates a new linked contract version rather than mutating the original.
 - id: AC-8
   criterion: Given a reseller contract's Commercial Summary is rendered to PDF (new or amended), then Studio and Vini appear as two separate tables, followed by an Additional Terms section listing only the selected clauses, and an amended contract regenerates the full PDF rather than producing a delta document.
+- id: AC-9
+  criterion: Given a Studio product on the Usage model with a monthly VIN wallet topped up to the contracted amount, when actual usage for the month is less than the committed minimum, then the Reseller is billed the minimum commitment amount and the unused VIN balance rolls over into next month's wallet.
+- id: AC-10
+  criterion: Given a Studio product on the Usage model, when actual usage for the month exceeds the committed minimum, then the Reseller is billed for actual usage at the contracted rate and no VIN balance rolls over (rollover only ever applies to unused credit, never to overage).
+- id: AC-11
+  criterion: Given a Studio product on the Monthly model, when the month ends, then the Reseller is billed the fixed monthly fee regardless of actual usage, and the wallet resets with no rollover in either direction.
+- id: AC-12
+  criterion: Given Spyne bills Dealers directly instead of the Reseller, when the Reseller's total actual usage across all Dealers falls short of the pooled minimum commitment, then each Dealer is billed their own actual usage plus a share of the shortfall proportional to their share of total usage, and the sum of all Dealer invoices equals exactly the Reseller's minimum commitment.
+- id: AC-13
+  criterion: Given a Reseller has set a VIN target and overage allowance % for a Dealer/Rooftop in Partner Console, when that Dealer/Rooftop's usage reaches target × (1 + overage%), then further processing for that Dealer/Rooftop is blocked until the Reseller raises the limit or the next cycle resets it, and the Reseller's own wallet/billing computation is unaffected either way.
+- id: AC-14
+  criterion: Given a Rooftop submits Images, Video tour, and 360° Spin together in one combined request and has already reached its Dealer/Rooftop hard cap for Images only, when the request is processed, then only the Image option is blocked (with an explanatory message shown) and Video tour and 360° Spin proceed normally.
 ```
 
 ## Dependencies
 
-- **Downstream invoicing/billing system** (not part of this console, not yet located by the product owner as of 2026-07-15): a Studio price change made via amendment must apply only to service requests from the 1st of the next calendar month onward — requests before that keep the prior price. This console/API only needs to record the amendment as it already does (new versioned contract, dated); the effective-dating enforcement itself is that system's responsibility and must be confirmed with its owning team before this ships. This is the one open item not resolved by this spec.
+- **Downstream invoicing/billing system**: a Studio price change made via amendment must apply only to service requests from the 1st of the next calendar month onward — requests before that keep the prior price. This console/API only needs to record the amendment as it already does (new versioned contract, dated); the effective-dating enforcement itself is that system's responsibility. Likely owner: the backend service behind the existing `GET /v1/reseller/summary` (User Management) and `GET /api/v1/credit-history` endpoints already used by Partner Console's Credit History feature — that service already pre-computes invoice amounts today, so it is the most likely place the wallet/rollover/minimum-commitment/shortfall-split math described above needs to live or be validated against.
+- **Existing "Product Credit Partner" ledger** (Partner Console, `apps/partners`): there is already a live per-product credit system (separate pools for `vins`/`images`/`videos`/`threesixtys`, each with current/allocated/purchased units and a debit/credit transaction history) that is structurally very close to the Studio VIN wallet described here. Worth confirming with that system's owners whether Studio's wallet should extend this existing ledger rather than building a parallel one — and specifically whether its transactions' `expiryDate` field means unused credit currently **expires**, which would directly conflict with the **rollover** behavior required here (AC-9). This conflict is not yet resolved.
+- **Rooftop-facing submission UI**: AC-14 assumes a screen where a Rooftop can submit a combined Images/Video/360° request and see the Image option specifically disabled — this UI has not yet been identified/confirmed to exist as described.
 
 ## Success Metrics
 
