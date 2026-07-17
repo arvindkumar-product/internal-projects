@@ -53,7 +53,7 @@ cut:
   - Fixed VIN-capacity commitment type (removed after initial build — Commitment is None/Minimum only)
   - Rooftop-based pricing for Studio (explicitly rejected; Studio stays reseller-wide per-VIN)
   - Annual Fee column in the Billing Summary (removed — Monthly Fee is the only recurring figure shown)
-  - VIN count as a billing multiplier for Studio's Usage model (removed — Offered Price is the flat per-tier fee; VIN count only selects which slab tier applies)
+  - VIN count as a multiplier on the Advance Breakdown display table for Studio's Usage model (removed — Offered Price shown there is a rate, e.g. `$3/VIN`, not a pre-multiplied sum; VIN count only selects which slab tier applies). This does NOT apply to the actual monthly bill: the wallet/billing engine (AC-9, AC-10) does multiply actual usage by this same rate — the two must not be conflated
   - Total row on the Advance Breakdown table (removed — Studio's rate is per-VIN and Vini's is per-rooftop, so summing them is not meaningful; the table is a rate card, not an invoice)
   - The "(per live Rooftop)" qualifier on the Advance Breakdown table's title (removed — it only ever applied to Vini and would mislabel Studio's reseller-wide rows)
 ```
