@@ -11,10 +11,12 @@
   routed at /partners/v2/reports) with a richer VINI tab, now split into two VINI sub-tabs:
 
   VINI › Overview:
-    - Top row, three parallel peers: Live Agent Count (agent count and dealer count both shown as
-      headline numbers, neither subordinate to the other) | Agent Breakdown (one row per agent type
-      + an Inbound/Outbound rollup) | Top Performing Agents leaderboard (Most Calls, Most Appointments,
-      Most Leads, Most ROI, Best ABR%, Best Conv Rate% — winner per category across the 4 agent types)
+    - Top row, two columns: Agents by type (2/3 width — merges the former Live Agent Count +
+      Agent Breakdown cards into one table: live agent/dealer/rooftop hero stats in the header,
+      then one row per agent type with share-of-agents bar, calls, leads, conv%, plus a locked
+      "WhatsApp Agent" upsell row and the Inbound/Outbound summary tiles) | Top Performing Agents
+      leaderboard (1/3 width, unchanged — Most Calls, Most Appointments, Most Leads, Most ROI,
+      Best ABR%, Best Conv Rate% — winner per category across the 4 agent types)
     - Attention needed (dealers/rooftops flagged this period, with a suggested next step)
 
   Dropped from an earlier draft of this tab: standalone "Dealers Needing Attention", "Leads Attempted",
@@ -166,15 +168,13 @@ body {
 .tab-panel { display: none; }
 .tab-panel--active { display: block; }
 
-/* ── Filter row ── */
-.filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+/* ── Filter pill ── */
 .filter-pill {
   display: inline-flex; align-items: center; gap: 6px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
   font-size: 13px; font-weight: 600; color: var(--text); padding: 8px 12px;
 }
 .filter-pill .chev { color: var(--muted); font-size: 11px; }
-.filter-note { font-size: 12px; color: var(--muted); margin-left: auto; }
 
 /* ── Dropdown menus (date filter pills) ── */
 .dropdown-wrap { position: relative; display: inline-flex; }
@@ -526,8 +526,12 @@ canvas { max-width: 100%; }
   ══════════════════════════════════════════════════════════ -->
   <div id="panel-vini" class="tab-panel tab-panel--active">
 
-    <!-- Filter row (page-level; applies across both VINI sub-tabs below) -->
-    <div class="filter-row">
+    <!-- VINI sub-tab bar + page-level date filter, same row, date pill pinned to the far right -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap;">
+      <div class="subtab-bar" style="margin-bottom:0;">
+        <button class="subtab-btn active" id="subtab-btn-overview" onclick="showViniSubTab('overview', this)">Overview</button>
+        <button class="subtab-btn" id="subtab-btn-dealer" onclick="showViniSubTab('dealer', this)">By Dealer &amp; Rooftop</button>
+      </div>
       <div class="dropdown-wrap">
         <span class="filter-pill" onclick="toggleDropdown('vini-date-menu', event)">📅 <span id="vini-date-label">Last 30 days</span> <span class="chev">▾</span></span>
         <div class="dropdown-menu" id="vini-date-menu">
@@ -538,140 +542,91 @@ canvas { max-width: 100%; }
           <button onclick="setSimpleDateLabel('vini-date-label', 'Last month', this)">Last month</button>
         </div>
       </div>
-      <span class="filter-note">Numbers below are illustrative — see footnote for how they're derived</span>
-    </div>
-
-    <!-- VINI sub-tab bar -->
-    <div class="subtab-bar">
-      <button class="subtab-btn active" id="subtab-btn-overview" onclick="showViniSubTab('overview', this)">Overview</button>
-      <button class="subtab-btn" id="subtab-btn-dealer" onclick="showViniSubTab('dealer', this)">By Dealer &amp; Rooftop</button>
     </div>
 
     <!-- ══════════════ VINI SUB-TAB: OVERVIEW ══════════════ -->
     <div id="subpanel-overview" class="tab-panel tab-panel--active">
 
     <!-- Verbatim transplant of the shared design (claude.ai/design) Overview content — see file header note. -->
-    <div style="display:grid;grid-template-columns:0.85fr 1.05fr 1.1fr;gap:20px;margin-top:20px;align-items:stretch;">
+    <div style="display:grid;grid-template-columns:1.9fr 1.1fr;gap:20px;margin-top:20px;align-items:stretch;">
 
-      <!-- ============ LIVE AGENT COUNT ============ -->
+      <!-- ============ AGENTS BY TYPE (merged Live Agent Count + Agent Breakdown) ============ -->
       <div style="display:flex;flex-direction:column;background:#fff;border:1px solid #E5E7EB;border-radius:16px;box-shadow:0 1px 2px 0 rgba(16,24,40,0.05);padding:24px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="msi" style="font-size:18px;color:#8E98A8;">groups</span>
-          <span style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#8E98A8;">Live agent count</span>
-        </div>
-
-        <!-- Hero stats -->
-        <div style="display:flex;margin-top:22px;">
-          <div style="flex:1;">
-            <div class="tnum" style="font-size:44px;font-weight:700;letter-spacing:-0.03em;line-height:1;">46</div>
-            <div style="font-size:13px;color:#6B7280;margin-top:8px;">live agents</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="msi" style="font-size:18px;color:#8E98A8;">groups</span>
+            <span style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#8E98A8;">Agents by type</span>
           </div>
-          <div style="flex:1;padding-left:20px;border-left:1px solid #EEF0F3;">
-            <div class="tnum" style="font-size:44px;font-weight:700;letter-spacing:-0.03em;line-height:1;">5<span style="font-size:20px;color:#8E98A8;">/5</span></div>
-            <div style="font-size:13px;color:#6B7280;margin-top:8px;">dealers live</div>
-          </div>
-          <div style="flex:1;padding-left:20px;border-left:1px solid #EEF0F3;">
-            <div class="tnum" style="font-size:44px;font-weight:700;letter-spacing:-0.03em;line-height:1;">11</div>
-            <div style="font-size:13px;color:#6B7280;margin-top:8px;">rooftops</div>
+          <div style="display:flex;align-items:baseline;gap:28px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:baseline;gap:6px;"><span class="tnum" style="font-size:26px;font-weight:700;letter-spacing:-0.02em;">46</span><span style="font-size:13px;color:#6B7280;">live agents</span></div>
+            <div style="display:flex;align-items:baseline;gap:6px;"><span class="tnum" style="font-size:26px;font-weight:700;letter-spacing:-0.02em;">5<span style="font-size:15px;color:#8E98A8;">/5</span></span><span style="font-size:13px;color:#6B7280;">dealers</span></div>
+            <div style="display:flex;align-items:baseline;gap:6px;"><span class="tnum" style="font-size:26px;font-weight:700;letter-spacing:-0.02em;">11</span><span style="font-size:13px;color:#6B7280;">rooftops</span></div>
           </div>
         </div>
 
-        <div style="height:1px;background:#EEF0F3;margin:24px 0 20px;"></div>
-        <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:#8E98A8;">Agents by type</div>
-
-        <!-- Distribution bars -->
-        <div style="display:flex;flex-direction:column;gap:16px;margin-top:20px;">
-          <div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <div style="display:flex;align-items:center;gap:9px;"><span style="width:9px;height:9px;border-radius:999px;background:#E8833A;"></span><span style="font-size:14px;color:#1A1A1A;">Sales Inbound</span></div>
-              <span class="tnum" style="font-size:15px;font-weight:700;">14</span>
-            </div>
-            <div style="height:8px;border-radius:999px;background:#F4F5F8;"><div style="width:78%;height:100%;border-radius:999px;background:#E8833A;"></div></div>
-          </div>
-          <div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <div style="display:flex;align-items:center;gap:9px;"><span style="width:9px;height:9px;border-radius:999px;background:#4600F2;"></span><span style="font-size:14px;color:#1A1A1A;">Sales Outbound</span></div>
-              <span class="tnum" style="font-size:15px;font-weight:700;">18</span>
-            </div>
-            <div style="height:8px;border-radius:999px;background:#F4F5F8;"><div style="width:100%;height:100%;border-radius:999px;background:#4600F2;"></div></div>
-          </div>
-          <div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <div style="display:flex;align-items:center;gap:9px;"><span style="width:9px;height:9px;border-radius:999px;background:#027A48;"></span><span style="font-size:14px;color:#1A1A1A;">Service Inbound</span></div>
-              <span class="tnum" style="font-size:15px;font-weight:700;">6</span>
-            </div>
-            <div style="height:8px;border-radius:999px;background:#F4F5F8;"><div style="width:33%;height:100%;border-radius:999px;background:#027A48;"></div></div>
-          </div>
-          <div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <div style="display:flex;align-items:center;gap:9px;"><span style="width:9px;height:9px;border-radius:999px;background:#175CD3;"></span><span style="font-size:14px;color:#1A1A1A;">Service Outbound</span></div>
-              <span class="tnum" style="font-size:15px;font-weight:700;">8</span>
-            </div>
-            <div style="height:8px;border-radius:999px;background:#F4F5F8;"><div style="width:44%;height:100%;border-radius:999px;background:#175CD3;"></div></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============ AGENT BREAKDOWN ============ -->
-      <div style="display:flex;flex-direction:column;background:#fff;border:1px solid #E5E7EB;border-radius:16px;box-shadow:0 1px 2px 0 rgba(16,24,40,0.05);padding:24px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <span class="msi" style="font-size:18px;color:#8E98A8;">insights</span>
-          <span style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#8E98A8;">Agent breakdown</span>
+        <!-- table header -->
+        <div style="display:grid;grid-template-columns:minmax(190px,2fr) minmax(220px,2.2fr) 0.7fr 0.7fr 0.7fr;gap:12px;margin-top:26px;padding-bottom:10px;border-bottom:1px solid #EEF0F3;">
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:#8E98A8;">Agent type</div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:#8E98A8;">Share of live agents</div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:#8E98A8;text-align:right;">Calls</div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:#8E98A8;text-align:right;">Leads</div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:#8E98A8;text-align:right;">Conv</div>
         </div>
 
-        <div style="display:flex;flex-direction:column;">
-          <!-- row -->
-          <div style="padding:16px 0;border-bottom:1px solid #EEF0F3;">
-            <div style="display:flex;align-items:center;gap:10px;"><span style="width:9px;height:9px;border-radius:999px;background:#E8833A;"></span><span style="font-size:15px;font-weight:600;">Sales Inbound</span></div>
-            <div style="display:flex;align-items:center;gap:14px;margin:10px 0 0 19px;flex-wrap:nowrap;white-space:nowrap;">
-              <span title="12,690 calls" style="display:inline-flex;align-items:center;gap:5px;font-size:14px;"><span class="msi" style="font-size:16px;color:#8E98A8;">call</span><strong class="tnum" style="font-weight:600;">12,690</strong></span>
-              <span title="12,100 leads" style="display:inline-flex;align-items:center;gap:5px;font-size:14px;"><span class="msi" style="font-size:16px;color:#8E98A8;">group</span><strong class="tnum" style="font-weight:600;">12,100</strong></span>
-              <span style="margin-left:auto;font-size:13px;font-weight:600;color:#027A48;background:#ECFDF3;padding:4px 10px;border-radius:999px;">2.06% conv</span>
-            </div>
-          </div>
-          <div style="padding:16px 0;border-bottom:1px solid #EEF0F3;">
-            <div style="display:flex;align-items:center;gap:10px;"><span style="width:9px;height:9px;border-radius:999px;background:#4600F2;"></span><span style="font-size:15px;font-weight:600;">Sales Outbound</span></div>
-            <div style="display:flex;align-items:center;gap:14px;margin:10px 0 0 19px;flex-wrap:nowrap;white-space:nowrap;">
-              <span title="61,900 calls" style="display:inline-flex;align-items:center;gap:5px;font-size:14px;"><span class="msi" style="font-size:16px;color:#8E98A8;">call</span><strong class="tnum" style="font-weight:600;">61,900</strong></span>
-              <span title="43,744 leads" style="display:inline-flex;align-items:center;gap:5px;font-size:14px;"><span class="msi" style="font-size:16px;color:#8E98A8;">group</span><strong class="tnum" style="font-weight:600;">43,744</strong></span>
-              <span style="margin-left:auto;font-size:13px;font-weight:600;color:#866800;background:#FFFAEB;padding:4px 10px;border-radius:999px;">0.13% conv</span>
-            </div>
-          </div>
-          <div style="padding:16px 0;border-bottom:1px solid #EEF0F3;">
-            <div style="display:flex;align-items:center;gap:10px;"><span style="width:9px;height:9px;border-radius:999px;background:#027A48;"></span><span style="font-size:15px;font-weight:600;">Service Inbound</span></div>
-            <div style="display:flex;align-items:center;gap:14px;margin:10px 0 0 19px;flex-wrap:nowrap;white-space:nowrap;">
-              <span title="2,410 calls" style="display:inline-flex;align-items:center;gap:5px;font-size:14px;"><span class="msi" style="font-size:16px;color:#8E98A8;">call</span><strong class="tnum" style="font-weight:600;">2,410</strong></span>
-              <span title="2,275 leads" style="display:inline-flex;align-items:center;gap:5px;font-size:14px;"><span class="msi" style="font-size:16px;color:#8E98A8;">group</span><strong class="tnum" style="font-weight:600;">2,275</strong></span>
-              <span style="margin-left:auto;font-size:13px;font-weight:600;color:#027A48;background:#ECFDF3;padding:4px 10px;border-radius:999px;">17.5% conv</span>
-            </div>
-          </div>
-          <div style="padding:16px 0;">
-            <div style="display:flex;align-items:center;gap:10px;"><span style="width:9px;height:9px;border-radius:999px;background:#175CD3;"></span><span style="font-size:15px;font-weight:600;">Service Outbound</span></div>
-            <div style="display:flex;align-items:center;gap:14px;margin:10px 0 0 19px;flex-wrap:nowrap;white-space:nowrap;">
-              <span title="34,600 calls" style="display:inline-flex;align-items:center;gap:5px;font-size:14px;"><span class="msi" style="font-size:16px;color:#8E98A8;">call</span><strong class="tnum" style="font-weight:600;">34,600</strong></span>
-              <span title="24,410 leads" style="display:inline-flex;align-items:center;gap:5px;font-size:14px;"><span class="msi" style="font-size:16px;color:#8E98A8;">group</span><strong class="tnum" style="font-weight:600;">24,410</strong></span>
-              <span style="margin-left:auto;font-size:13px;font-weight:600;color:#B42318;background:#FEF3F2;padding:4px 10px;border-radius:999px;">0.07% conv</span>
-            </div>
-          </div>
+        <!-- rows -->
+        <div style="display:grid;grid-template-columns:minmax(190px,2fr) minmax(220px,2.2fr) 0.7fr 0.7fr 0.7fr;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid #F1F2F4;">
+          <div style="display:flex;align-items:center;gap:9px;"><span style="width:9px;height:9px;border-radius:999px;background:#E8833A;flex-shrink:0;"></span><div><div style="font-size:14px;font-weight:600;">Sales Inbound</div><div style="font-size:12px;color:#8E98A8;margin-top:2px;">14 agents · 4 dealers</div></div></div>
+          <div style="height:8px;border-radius:999px;background:#F4F5F8;"><div style="width:78%;height:100%;border-radius:999px;background:#E8833A;"></div></div>
+          <div class="tnum" style="text-align:right;font-size:14px;font-weight:600;">12,690</div>
+          <div class="tnum" style="text-align:right;font-size:14px;font-weight:600;">12,100</div>
+          <div style="text-align:right;"><span style="font-size:12px;font-weight:600;color:#027A48;background:#ECFDF3;padding:3px 9px;border-radius:999px;">2.06%</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(190px,2fr) minmax(220px,2.2fr) 0.7fr 0.7fr 0.7fr;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid #F1F2F4;">
+          <div style="display:flex;align-items:center;gap:9px;"><span style="width:9px;height:9px;border-radius:999px;background:#4600F2;flex-shrink:0;"></span><div><div style="font-size:14px;font-weight:600;">Sales Outbound</div><div style="font-size:12px;color:#8E98A8;margin-top:2px;">18 agents · 5 dealers</div></div></div>
+          <div style="height:8px;border-radius:999px;background:#F4F5F8;"><div style="width:100%;height:100%;border-radius:999px;background:#4600F2;"></div></div>
+          <div class="tnum" style="text-align:right;font-size:14px;font-weight:600;">61,900</div>
+          <div class="tnum" style="text-align:right;font-size:14px;font-weight:600;">43,744</div>
+          <div style="text-align:right;"><span style="font-size:12px;font-weight:600;color:#866800;background:#FFFAEB;padding:3px 9px;border-radius:999px;">0.13%</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(190px,2fr) minmax(220px,2.2fr) 0.7fr 0.7fr 0.7fr;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid #F1F2F4;">
+          <div style="display:flex;align-items:center;gap:9px;"><span style="width:9px;height:9px;border-radius:999px;background:#027A48;flex-shrink:0;"></span><div><div style="font-size:14px;font-weight:600;">Service Inbound</div><div style="font-size:12px;color:#8E98A8;margin-top:2px;">6 agents · 1 dealer</div></div></div>
+          <div style="height:8px;border-radius:999px;background:#F4F5F8;"><div style="width:33%;height:100%;border-radius:999px;background:#027A48;"></div></div>
+          <div class="tnum" style="text-align:right;font-size:14px;font-weight:600;">2,410</div>
+          <div class="tnum" style="text-align:right;font-size:14px;font-weight:600;">2,275</div>
+          <div style="text-align:right;"><span style="font-size:12px;font-weight:600;color:#027A48;background:#ECFDF3;padding:3px 9px;border-radius:999px;">17.5%</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(190px,2fr) minmax(220px,2.2fr) 0.7fr 0.7fr 0.7fr;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid #F1F2F4;">
+          <div style="display:flex;align-items:center;gap:9px;"><span style="width:9px;height:9px;border-radius:999px;background:#175CD3;flex-shrink:0;"></span><div><div style="font-size:14px;font-weight:600;">Service Outbound</div><div style="font-size:12px;color:#8E98A8;margin-top:2px;">8 agents · 2 dealers</div></div></div>
+          <div style="height:8px;border-radius:999px;background:#F4F5F8;"><div style="width:44%;height:100%;border-radius:999px;background:#175CD3;"></div></div>
+          <div class="tnum" style="text-align:right;font-size:14px;font-weight:600;">34,600</div>
+          <div class="tnum" style="text-align:right;font-size:14px;font-weight:600;">24,410</div>
+          <div style="text-align:right;"><span style="font-size:12px;font-weight:600;color:#B42318;background:#FEF3F2;padding:3px 9px;border-radius:999px;">0.07%</span></div>
+        </div>
+
+        <!-- WhatsApp Agent — locked upsell row, illustrative only -->
+        <div style="display:grid;grid-template-columns:minmax(190px,2fr) minmax(220px,2.2fr) 0.7fr 0.7fr 0.7fr;gap:12px;align-items:center;padding:14px 0;">
+          <div style="display:flex;align-items:center;gap:9px;"><span class="msi" style="font-size:16px;color:#B0B7C3;">lock</span><div><div style="font-size:14px;font-weight:600;color:#8E98A8;">WhatsApp Agent</div><div style="font-size:12px;color:#B0B7C3;margin-top:2px;">Not in your plan</div></div></div>
+          <div style="grid-column:2 / span 3;font-size:13px;color:#8E98A8;">Add text-based lead follow-up — reach buyers where they already are.</div>
+          <div style="text-align:right;"><button style="background:#F4F0FF;color:#4600F2;border:none;border-radius:999px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">+ Add agent</button></div>
         </div>
 
         <!-- summary tiles -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:auto;padding-top:20px;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px;padding-top:20px;border-top:1px solid #EEF0F3;">
           <div style="background:#F9FAFB;border:1px solid #EEF0F3;border-radius:10px;padding:14px 16px;text-align:center;">
             <div class="tnum" style="font-size:20px;font-weight:700;">15,100</div>
-            <div style="font-size:12px;color:#6B7280;margin-top:4px;">Inbound calls answered</div>
+            <div style="font-size:12px;color:#6B7280;margin-top:4px;">Inbound answered</div>
           </div>
           <div style="background:#F9FAFB;border:1px solid #EEF0F3;border-radius:10px;padding:14px 16px;text-align:center;">
             <div class="tnum" style="font-size:20px;font-weight:700;">4.51%</div>
-            <div style="font-size:12px;color:#6B7280;margin-top:4px;">Inbound conv. rate</div>
+            <div style="font-size:12px;color:#6B7280;margin-top:4px;">Inbound conv.</div>
           </div>
           <div style="background:#F9FAFB;border:1px solid #EEF0F3;border-radius:10px;padding:14px 16px;text-align:center;">
             <div class="tnum" style="font-size:20px;font-weight:700;">96,500</div>
-            <div style="font-size:12px;color:#6B7280;margin-top:4px;">Outbound total calls</div>
+            <div style="font-size:12px;color:#6B7280;margin-top:4px;">Outbound calls</div>
           </div>
           <div style="background:#F9FAFB;border:1px solid #EEF0F3;border-radius:10px;padding:14px 16px;text-align:center;">
             <div class="tnum" style="font-size:20px;font-weight:700;">0.11%</div>
-            <div style="font-size:12px;color:#6B7280;margin-top:4px;">Outbound appt. rate</div>
+            <div style="font-size:12px;color:#6B7280;margin-top:4px;">Outbound appt.</div>
           </div>
         </div>
       </div>
