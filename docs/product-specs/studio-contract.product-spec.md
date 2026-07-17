@@ -2,7 +2,7 @@
 spec_format_version: "0.1"
 title: "Studio-Contract"
 artifact_type: "prd"
-spec_revision: 3
+spec_revision: 4
 author: "ProductSpec.io"
 created_at: "2026-07-09T00:00:00Z"
 updated_at: "2026-07-17T00:00:00Z"
@@ -31,7 +31,7 @@ in:
   - Add-ons (White label, Quality check, Custom backgrounds) and Add-on products (Studio Instant, Studio Promote) with independent enable/disable
   - Studio Integration Fee note + waiver checkbox (informational, non-blocking)
   - Reseller Type (Partnership/SaaS) and Clause review, surfaced in the Terms & Conditions section, always visible (not progressively gated)
-  - Unified Billing Summary combining Studio (reseller-wide) and Vini (per-rooftop) with an adaptive Basis column, plus one combined Total
+  - Unified "Advance Breakdown" table (title with no "per live Rooftop" qualifier) combining Studio (reseller-wide) and Vini (per-rooftop) with an adaptive Basis column; Monthly Fee shows the per-unit rate only (e.g. `$3/VIN`, `$500/Rooftop`) for both products, never a computed total, and there is no Total row — this table is a rate card at contract-creation time, not the actual invoice
   - Global currency selector propagates to every price symbol across Studio and Vini
   - Draft save/resume for a Studio-priced reseller contract, using the existing draft/prefill mechanism unchanged
   - Amendment of an existing reseller contract's Studio pricing, using the existing amendment mechanism unchanged (new linked contract version per amendment; no new approval/re-signature step). A Studio product not previously selected may be newly enabled on amendment; a previously-enabled product cannot be disabled but its VIN count/Offered Price/Disc % remain editable
@@ -54,6 +54,8 @@ cut:
   - Rooftop-based pricing for Studio (explicitly rejected; Studio stays reseller-wide per-VIN)
   - Annual Fee column in the Billing Summary (removed — Monthly Fee is the only recurring figure shown)
   - VIN count as a billing multiplier for Studio's Usage model (removed — Offered Price is the flat per-tier fee; VIN count only selects which slab tier applies)
+  - Total row on the Advance Breakdown table (removed — Studio's rate is per-VIN and Vini's is per-rooftop, so summing them is not meaningful; the table is a rate card, not an invoice)
+  - The "(per live Rooftop)" qualifier on the Advance Breakdown table's title (removed — it only ever applied to Vini and would mislabel Studio's reseller-wide rows)
 ```
 
 ## Acceptance Criteria
@@ -64,13 +66,13 @@ cut:
 - id: AC-2
   criterion: Given any Studio or Vini product row, when the admin edits either Offered Price or Disc %, then the other field recalculates automatically from Cost Price, in both directions, with no ceiling on Offered Price for either product — it may exceed Cost Price and produce a negative Disc %.
 - id: AC-3
-  criterion: Given Commitment is set to Minimum with a floor amount, when the Billing Summary computes Studio's Monthly Fee, then it equals the greater of (sum of selected product fees) and the floor amount.
+  criterion: Given Commitment is set to Minimum with a floor amount, when the wallet/billing engine computes the Reseller's actual monthly bill for Studio (not the Advance Breakdown display table, which never totals), then it equals the greater of (sum of actual per-product usage fees) and the floor amount.
 - id: AC-4
   criterion: Given Reseller Type is set to Partnership, when the clause list renders, then Non-solicitation, Dealer account protection, Margin freedom, and GTM support show as auto-included and locked (not removable).
 - id: AC-5
   criterion: Given the global currency selector is changed, when any Studio or Vini price is displayed anywhere on the page, then all currency symbols update immediately with none hardcoded.
 - id: AC-6
-  criterion: Given a customer type of Reseller, when the Billing Summary Total is computed, then Vini's contribution follows the existing reseller Vini billing computation already implemented in the console, unchanged — this spec introduces no new formula for Vini.
+  criterion: Given a customer type of Reseller, when Vini's actual monthly bill is computed (a separate calculation from the Advance Breakdown display table, which shows rate only and never totals), then it follows the existing reseller Vini billing computation already implemented in the console, unchanged — this spec introduces no new formula for Vini.
 - id: AC-7
   criterion: Given an existing reseller contract with some Studio products enabled, when a sales admin opens it in amendment mode, then previously-unselected products can be newly enabled, previously-enabled products cannot be disabled but their VIN count/Offered Price/Disc % remain editable, and saving creates a new linked contract version rather than mutating the original.
 - id: AC-8
@@ -87,6 +89,8 @@ cut:
   criterion: Given a Reseller has set a VIN target and overage allowance % for a Dealer/Rooftop in Partner Console, when that Dealer/Rooftop's usage reaches target × (1 + overage%), then further processing for that Dealer/Rooftop is blocked until the Reseller raises the limit or the next cycle resets it, and the Reseller's own wallet/billing computation is unaffected either way.
 - id: AC-14
   criterion: Given a Rooftop submits Images, Video tour, and 360° Spin together in one combined request and has already reached its Dealer/Rooftop hard cap for Images only, when the request is processed, then only the Image option is blocked (with an explanatory message shown) and Video tour and 360° Spin proceed normally.
+- id: AC-15
+  criterion: Given the Reseller customer type's Advance Breakdown table (renamed from "Advance Breakdown (per live Rooftop)"), when Studio and Vini rows are rendered, then the Monthly Fee column shows the per-unit rate only for both (e.g. `$3/VIN` for Studio, `$500/Rooftop` for Vini) — never a computed total — and there is no Total row anywhere in the table.
 ```
 
 ## Dependencies
