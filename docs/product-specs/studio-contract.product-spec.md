@@ -2,7 +2,7 @@
 spec_format_version: "0.1"
 title: "Studio-Contract"
 artifact_type: "prd"
-spec_revision: 4
+spec_revision: 5
 author: "ProductSpec.io"
 created_at: "2026-07-09T00:00:00Z"
 updated_at: "2026-07-17T00:00:00Z"
@@ -37,17 +37,17 @@ in:
   - Amendment of an existing reseller contract's Studio pricing, using the existing amendment mechanism unchanged (new linked contract version per amendment; no new approval/re-signature step). A Studio product not previously selected may be newly enabled on amendment; a previously-enabled product cannot be disabled but its VIN count/Offered Price/Disc % remain editable
   - Contract PDF: Commercial Summary renders Studio and Vini as two separate tables (not merged), followed by an Additional Terms section listing selected clauses. Amendment PDFs are a full regenerated document (not a delta/addendum), consistent with the existing PDF pipeline
   - A monthly VIN credit wallet per Studio product, per Reseller (never per Dealer/Rooftop): topped up each month with the contracted VIN count, debited per request processed, balance allowed to go negative to permit overusage
-  - Usage-model billing: charge the greater of (actual usage × contracted rate) and the minimum commitment floor; if actual usage is below the floor, the unused VIN balance rolls over into next month's wallet
+  - Usage-model billing: the minimum commitment floor is ONE combined dollar amount, checked once against the SUM of actual-usage fees across every Usage-model Studio product together (never per product); if that combined sum is below the floor, the Reseller is billed the floor amount and EVERY product's unused VIN balance rolls over together; if at/above, the Reseller is billed the combined actual sum and NO product rolls over that cycle, even one that was individually far under its own commitment
   - Monthly-model billing: fixed monthly fee regardless of actual usage; wallet resets every cycle with no rollover in either direction
-  - Usage recorded at Reseller, Dealer, and Rooftop granularity (three-level rollup) for reporting and for splitting bills when Spyne invoices Dealers directly, independent of the wallet computation itself
-  - Dealer-direct billing: when Spyne bills each Dealer instead of the Reseller, each Dealer is billed their own actual usage, and any shortfall needed to meet the Reseller's pooled minimum commitment is split across Dealers in proportion to their share of that month's usage
+  - Usage recorded at Reseller, Dealer, and Rooftop granularity (three-level rollup) for reporting and for running the Dealer-direct billing logic, independent of the wallet computation itself
+  - Dealer-direct billing: when Spyne bills each Dealer instead of the Reseller, the SAME per-product VIN commitments and the SAME dollar floor are applied INDEPENDENTLY to each Dealer (no shortfall-splitting, no proportional allocation) — each Dealer's own combined actual usage is checked against the same floor, billed and rolled-over on their own, meaning total collected across Dealers can differ from what one pooled Reseller invoice would have been
   - Reseller-facing, self-serve VIN target + configurable overage allowance % (default 20%) per Dealer/Rooftop, set in Partner Console, hard-blocking further processing for that Dealer/Rooftop once usage reaches target × (1 + overage%) — entirely independent of and without effect on the Reseller-level wallet/billing computation
   - Combined multi-product requests (e.g. Images + Video tour + 360° Spin submitted together): if only one product has reached its Dealer/Rooftop hard cap, only that product is blocked (with an explanatory message) — the rest of the request proceeds normally
 out:
   - Overage billing calculation for VIN-capacity commitments (flagging only, no charge logic)
   - Any new approval/re-signature gate on amendment (none exists today, none is being added)
   - Client-side effective-dating of price changes (see Dependencies — enforced downstream, not in this form)
-  - Any minimum commitment held at the Dealer or Rooftop level — the minimum commitment always stays pooled at the Reseller level only, individual Dealers/Rooftops are never held to their own minimum
+  - Dealers/Rooftops having their OWN, independently negotiated minimum commitment terms — when Spyne bills Dealers directly, the Reseller's SAME contract terms are re-applied per Dealer, never a separately negotiated number
   - Any validation, reference, or display of the contract's committed VIN count inside the Partner Console's Dealer/Rooftop VIN target UI — that allocation is a fully independent number the Reseller chooses, with no tie to what's on the Spyne contract
 cut:
   - Fixed VIN-capacity commitment type (removed after initial build — Commitment is None/Minimum only)
@@ -78,19 +78,21 @@ cut:
 - id: AC-8
   criterion: Given a reseller contract's Commercial Summary is rendered to PDF (new or amended), then Studio and Vini appear as two separate tables, followed by an Additional Terms section listing only the selected clauses, and an amended contract regenerates the full PDF rather than producing a delta document.
 - id: AC-9
-  criterion: Given a Studio product on the Usage model with a monthly VIN wallet topped up to the contracted amount, when actual usage for the month is less than the committed minimum, then the Reseller is billed the minimum commitment amount and the unused VIN balance rolls over into next month's wallet.
+  criterion: Given multiple Studio products on the Usage model each with their own committed VIN count and rate, when the SUM of actual-usage fees across all of them for the month is less than the single combined minimum commitment floor, then the Reseller is billed the floor amount and EVERY product's unused VIN balance rolls over into next month's wallet — not evaluated or applied per product.
 - id: AC-10
-  criterion: Given a Studio product on the Usage model, when actual usage for the month exceeds the committed minimum, then the Reseller is billed for actual usage at the contracted rate and no VIN balance rolls over (rollover only ever applies to unused credit, never to overage).
+  criterion: Given multiple Studio products on the Usage model, when the SUM of actual-usage fees across all of them for the month is at or above the single combined minimum commitment floor, then the Reseller is billed that combined actual sum and NO product rolls over any unused VIN balance that cycle, even a product that individually used far less than its own committed VIN count.
 - id: AC-11
   criterion: Given a Studio product on the Monthly model, when the month ends, then the Reseller is billed the fixed monthly fee regardless of actual usage, and the wallet resets with no rollover in either direction.
 - id: AC-12
-  criterion: Given Spyne bills Dealers directly instead of the Reseller, when the Reseller's total actual usage across all Dealers falls short of the pooled minimum commitment, then each Dealer is billed their own actual usage plus a share of the shortfall proportional to their share of total usage, and the sum of all Dealer invoices equals exactly the Reseller's minimum commitment.
+  criterion: Given Spyne bills Dealers directly instead of the Reseller, when each Dealer's own combined actual-usage sum across all products is compared to the SAME dollar floor from the contract, then that Dealer is billed the floor amount if under, or their own actual sum if at/above — independently of every other Dealer, with no proportional shortfall-splitting across Dealers, such that the total collected across all Dealers may differ from what a single pooled Reseller invoice would have been.
 - id: AC-13
   criterion: Given a Reseller has set a VIN target and overage allowance % for a Dealer/Rooftop in Partner Console, when that Dealer/Rooftop's usage reaches target × (1 + overage%), then further processing for that Dealer/Rooftop is blocked until the Reseller raises the limit or the next cycle resets it, and the Reseller's own wallet/billing computation is unaffected either way.
 - id: AC-14
   criterion: Given a Rooftop submits Images, Video tour, and 360° Spin together in one combined request and has already reached its Dealer/Rooftop hard cap for Images only, when the request is processed, then only the Image option is blocked (with an explanatory message shown) and Video tour and 360° Spin proceed normally.
 - id: AC-15
   criterion: Given the Reseller customer type's Advance Breakdown table (renamed from "Advance Breakdown (per live Rooftop)"), when Studio and Vini rows are rendered, then the Monthly Fee column shows the per-unit rate only for both (e.g. `$3/VIN` for Studio, `$500/Rooftop` for Vini) — never a computed total — and there is no Total row anywhere in the table.
+- id: AC-16
+  criterion: Given Spyne bills a Dealer directly and that Dealer's own combined actual usage falls under the floor this month, when next month's wallet tops up, then only that Dealer's own unused VIN balance rolls forward for them — it never becomes available to, or is affected by, any other Dealer under the same Reseller.
 ```
 
 ## Dependencies
