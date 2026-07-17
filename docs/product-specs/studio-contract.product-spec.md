@@ -2,7 +2,7 @@
 spec_format_version: "0.1"
 title: "Studio-Contract"
 artifact_type: "prd"
-spec_revision: 5
+spec_revision: 6
 author: "ProductSpec.io"
 created_at: "2026-07-09T00:00:00Z"
 updated_at: "2026-07-17T00:00:00Z"
@@ -37,7 +37,7 @@ in:
   - Amendment of an existing reseller contract's Studio pricing, using the existing amendment mechanism unchanged (new linked contract version per amendment; no new approval/re-signature step). A Studio product not previously selected may be newly enabled on amendment; a previously-enabled product cannot be disabled but its VIN count/Offered Price/Disc % remain editable
   - Contract PDF: Commercial Summary renders Studio and Vini as two separate tables (not merged), followed by an Additional Terms section listing selected clauses. Amendment PDFs are a full regenerated document (not a delta/addendum), consistent with the existing PDF pipeline
   - A monthly VIN credit wallet per Studio product, per Reseller (never per Dealer/Rooftop): topped up each month with the contracted VIN count, debited per request processed, balance allowed to go negative to permit overusage
-  - Usage-model billing: the minimum commitment floor is ONE combined dollar amount, checked once against the SUM of actual-usage fees across every Usage-model Studio product together (never per product); if that combined sum is below the floor, the Reseller is billed the floor amount and EVERY product's unused VIN balance rolls over together; if at/above, the Reseller is billed the combined actual sum and NO product rolls over that cycle, even one that was individually far under its own commitment
+  - Usage-model billing: if Commitment is None, the Reseller is billed the sum of each product's actual-usage fee with NO rollover in either direction (same as Monthly-model billing); if Commitment is Minimum, the floor is ONE combined dollar amount, checked once against the SUM of actual-usage fees across every Usage-model Studio product together (never per product) — if that combined sum is below the floor, the Reseller is billed the floor amount and EVERY product's unused VIN balance rolls over together; if at/above, the Reseller is billed the combined actual sum and NO product rolls over that cycle, even one that was individually far under its own commitment
   - Monthly-model billing: fixed monthly fee regardless of actual usage; wallet resets every cycle with no rollover in either direction
   - Usage recorded at Reseller, Dealer, and Rooftop granularity (three-level rollup) for reporting and for running the Dealer-direct billing logic, independent of the wallet computation itself
   - Dealer-direct billing: when Spyne bills each Dealer instead of the Reseller, the SAME per-product VIN commitments and the SAME dollar floor are applied INDEPENDENTLY to each Dealer (no shortfall-splitting, no proportional allocation) — each Dealer's own combined actual usage is checked against the same floor, billed and rolled-over on their own, meaning total collected across Dealers can differ from what one pooled Reseller invoice would have been
@@ -93,10 +93,13 @@ cut:
   criterion: Given the Reseller customer type's Advance Breakdown table (renamed from "Advance Breakdown (per live Rooftop)"), when Studio and Vini rows are rendered, then the Monthly Fee column shows the per-unit rate only for both (e.g. `$3/VIN` for Studio, `$500/Rooftop` for Vini) — never a computed total — and there is no Total row anywhere in the table.
 - id: AC-16
   criterion: Given Spyne bills a Dealer directly and that Dealer's own combined actual usage falls under the floor this month, when next month's wallet tops up, then only that Dealer's own unused VIN balance rolls forward for them — it never becomes available to, or is affected by, any other Dealer under the same Reseller.
+- id: AC-17
+  criterion: Given a Studio product on the Usage model with Commitment set to None, when the month ends, then the Reseller is billed the sum of each product's actual-usage fee with no floor applied, and no VIN balance rolls over in either direction — rollover only ever applies when Commitment is Minimum.
 ```
 
 ## Dependencies
 
+- **Slab values (resolved)**: actual VIN-tier rates for the 5 products are stored in the DB, not hardcoded in the console — same pattern as Vini. The Partnership team supplies real values; all worked examples in the AC's and companion docs use illustrative numbers only.
 - **Downstream invoicing/billing system**: a Studio price change made via amendment must apply only to service requests from the 1st of the next calendar month onward — requests before that keep the prior price. This console/API only needs to record the amendment as it already does (new versioned contract, dated); the effective-dating enforcement itself is that system's responsibility. Likely owner: the backend service behind the existing `GET /v1/reseller/summary` (User Management) and `GET /api/v1/credit-history` endpoints already used by Partner Console's Credit History feature — that service already pre-computes invoice amounts today, so it is the most likely place the wallet/rollover/minimum-commitment/shortfall-split math described above needs to live or be validated against.
 - **Existing "Product Credit Partner" ledger** (Partner Console, `apps/partners`): there is already a live per-product credit system (separate pools for `vins`/`images`/`videos`/`threesixtys`, each with current/allocated/purchased units and a debit/credit transaction history) that is structurally very close to the Studio VIN wallet described here. Worth confirming with that system's owners whether Studio's wallet should extend this existing ledger rather than building a parallel one — and specifically whether its transactions' `expiryDate` field means unused credit currently **expires**, which would directly conflict with the **rollover** behavior required here (AC-9). This conflict is not yet resolved.
 - **Rooftop-facing submission UI**: AC-14 assumes a screen where a Rooftop can submit a combined Images/Video/360° request and see the Image option specifically disabled — this UI has not yet been identified/confirmed to exist as described.
