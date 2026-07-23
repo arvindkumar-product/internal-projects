@@ -735,27 +735,32 @@ canvas { max-width: 100%; }
           <span style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#8E98A8;">Agent-type metrics</span>
           <span style="font-size:13px;color:#8E98A8;">— Inbound &amp; Outbound, Sales &amp; Service</span>
         </div>
-        <button onclick="toggleMetrics()" style="display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;background:#fff;border:1px solid #E5E7EB;border-radius:8px;font-size:13px;font-weight:600;color:#4600F2;cursor:pointer;"><span id="metrics-label">Show agent-type metrics</span><span class="msi" id="metrics-icon" style="font-size:18px;">expand_more</span></button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="metrics-switch-label" style="font-size:13px;font-weight:600;color:#4600F2;">Expand</span>
+          <button onclick="toggleMetrics()" id="metrics-switch" aria-label="Show agent-type metrics" style="position:relative;width:40px;height:22px;border-radius:999px;background:#E5E7EB;border:none;cursor:pointer;flex-shrink:0;padding:0;transition:background .15s;">
+            <span id="metrics-switch-knob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s;"></span>
+          </button>
+        </div>
       </div>
 
       <!-- Collapsed compact summary -->
       <div id="metrics-compact" style="display:block;">
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:0 20px 20px;">
-        <div id="tile-si" onclick="toggleAgentFilter('SI')" class="agent-tile" style="border:1px solid #EEF0F3;border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color 0.12s,background 0.12s;">
+        <div id="tile-si" onclick="toggleAgentFilter('SI')" class="agent-tile" style="border:1px solid #EEF0F3;border-radius:12px;padding:14px 12px;cursor:pointer;transition:border-color 0.12s,background 0.12s;">
           <div style="display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:8px;"><span style="width:9px;height:9px;border-radius:999px;background:#E8833A;"></span><span style="font-size:14px;font-weight:600;">Sales Inbound</span><span class="msi check-icon" id="check-si" style="font-size:15px;color:#E8833A;display:none;">check_circle</span></div><span style="font-size:12px;color:#8E98A8;">14 agents</span></div>
-          <div style="display:flex;gap:20px;margin-top:12px;"><div><div class="tnum" style="font-size:18px;font-weight:700;">13,540</div><div style="font-size:11px;color:#8E98A8;margin-top:2px;">Total calls</div></div><div><div class="tnum" style="font-size:18px;font-weight:700;color:#027A48;">2.06%</div><div style="font-size:11px;color:#8E98A8;margin-top:2px;">Conv rate</div></div></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px;"><div><div class="tnum" style="font-size:15px;font-weight:700;">13,540</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Total calls</div></div><div><div class="tnum" style="font-size:15px;font-weight:700;color:#027A48;">93.7%</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Answer rate</div></div><div><div class="tnum" style="font-size:15px;font-weight:700;color:#027A48;">249</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Appointment</div></div></div>
         </div>
-        <div id="tile-svi" onclick="toggleAgentFilter('SVI')" class="agent-tile" style="border:1px solid #EEF0F3;border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color 0.12s,background 0.12s;">
+        <div id="tile-svi" onclick="toggleAgentFilter('SVI')" class="agent-tile" style="border:1px solid #EEF0F3;border-radius:12px;padding:14px 12px;cursor:pointer;transition:border-color 0.12s,background 0.12s;">
           <div style="display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:8px;"><span style="width:9px;height:9px;border-radius:999px;background:#027A48;"></span><span style="font-size:14px;font-weight:600;">Service Inbound</span><span class="msi check-icon" id="check-svi" style="font-size:15px;color:#027A48;display:none;">check_circle</span></div><span style="font-size:12px;color:#8E98A8;">6 agents</span></div>
-          <div style="display:flex;gap:20px;margin-top:12px;"><div><div class="tnum" style="font-size:18px;font-weight:700;">2,530</div><div style="font-size:11px;color:#8E98A8;margin-top:2px;">Total calls</div></div><div><div class="tnum" style="font-size:18px;font-weight:700;color:#027A48;">17.5%</div><div style="font-size:11px;color:#8E98A8;margin-top:2px;">Conv rate</div></div></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px;"><div><div class="tnum" style="font-size:15px;font-weight:700;">2,530</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Total calls</div></div><div><div class="tnum" style="font-size:15px;font-weight:700;color:#027A48;">95.3%</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Answer rate</div></div><div><div class="tnum" style="font-size:15px;font-weight:700;color:#027A48;">399</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Appointment</div></div></div>
         </div>
-        <div id="tile-so" onclick="toggleAgentFilter('SO')" class="agent-tile" style="border:1px solid #EEF0F3;border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color 0.12s,background 0.12s;">
+        <div id="tile-so" onclick="toggleAgentFilter('SO')" class="agent-tile" style="border:1px solid #EEF0F3;border-radius:12px;padding:14px 12px;cursor:pointer;transition:border-color 0.12s,background 0.12s;">
           <div style="display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:8px;"><span style="width:9px;height:9px;border-radius:999px;background:#4600F2;"></span><span style="font-size:14px;font-weight:600;">Sales Outbound</span><span class="msi check-icon" id="check-so" style="font-size:15px;color:#4600F2;display:none;">check_circle</span></div><span style="font-size:12px;color:#8E98A8;">18 agents</span></div>
-          <div style="display:flex;gap:20px;margin-top:12px;"><div><div class="tnum" style="font-size:18px;font-weight:700;">61,900</div><div style="font-size:11px;color:#8E98A8;margin-top:2px;">Total calls</div></div><div><div class="tnum" style="font-size:18px;font-weight:700;color:#027A48;">85.4%</div><div style="font-size:11px;color:#8E98A8;margin-top:2px;">Conv. rate</div></div></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px;"><div><div class="tnum" style="font-size:15px;font-weight:700;">61,900</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Total calls</div></div><div><div class="tnum" style="font-size:15px;font-weight:700;color:#E8833A;">57</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Appointment</div></div><div><div class="tnum" style="font-size:15px;font-weight:700;color:#866800;">0.13%</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Conv rate</div></div></div>
         </div>
-        <div id="tile-svo" onclick="toggleAgentFilter('SVO')" class="agent-tile" style="border:1px solid #EEF0F3;border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color 0.12s,background 0.12s;">
+        <div id="tile-svo" onclick="toggleAgentFilter('SVO')" class="agent-tile" style="border:1px solid #EEF0F3;border-radius:12px;padding:14px 12px;cursor:pointer;transition:border-color 0.12s,background 0.12s;">
           <div style="display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:8px;"><span style="width:9px;height:9px;border-radius:999px;background:#175CD3;"></span><span style="font-size:14px;font-weight:600;">Service Outbound</span><span class="msi check-icon" id="check-svo" style="font-size:15px;color:#175CD3;display:none;">check_circle</span></div><span style="font-size:12px;color:#8E98A8;">8 agents</span></div>
-          <div style="display:flex;gap:20px;margin-top:12px;"><div><div class="tnum" style="font-size:18px;font-weight:700;">34,600</div><div style="font-size:11px;color:#8E98A8;margin-top:2px;">Total calls</div></div><div><div class="tnum" style="font-size:18px;font-weight:700;color:#027A48;">81.9%</div><div style="font-size:11px;color:#8E98A8;margin-top:2px;">Conv. rate</div></div></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px;"><div><div class="tnum" style="font-size:15px;font-weight:700;">34,600</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Total calls</div></div><div><div class="tnum" style="font-size:15px;font-weight:700;color:#E8833A;">16</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Appointment</div></div><div><div class="tnum" style="font-size:15px;font-weight:700;color:#B42318;">0.07%</div><div style="font-size:9.5px;color:#8E98A8;margin-top:2px;line-height:1.25;">Conv rate</div></div></div>
         </div>
       </div>
       </div>
@@ -988,8 +993,10 @@ function toggleMetrics() {
   metricsOpen = !metricsOpen;
   document.getElementById('metrics-compact').style.display = metricsOpen ? 'none' : 'block';
   document.getElementById('metrics-expanded').style.display = metricsOpen ? 'block' : 'none';
-  document.getElementById('metrics-label').textContent = metricsOpen ? 'Hide agent-type metrics' : 'Show agent-type metrics';
-  document.getElementById('metrics-icon').textContent = metricsOpen ? 'expand_less' : 'expand_more';
+  document.getElementById('metrics-switch').style.background = metricsOpen ? '#4600F2' : '#E5E7EB';
+  document.getElementById('metrics-switch-knob').style.transform = metricsOpen ? 'translateX(18px)' : 'none';
+  document.getElementById('metrics-switch-label').textContent = metricsOpen ? 'Collapse' : 'Expand';
+  document.getElementById('metrics-switch').setAttribute('aria-label', metricsOpen ? 'Collapse agent-type metrics' : 'Expand agent-type metrics');
 }
 
 /* ── Dealer / rooftop table: per-dealer expand/collapse. Dream Automotive (D) starts
