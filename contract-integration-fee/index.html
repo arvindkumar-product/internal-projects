@@ -1,0 +1,1973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>New Contract Flow — Prototype</title>
+<!--
+  PROTOTYPE — reference-docs only. Not wired to any code path. All figures are dummy data.
+
+  Faithful structural mockup of the LIVE "Create New Contract" flow at
+  apps/admin-tools/components/admin-tools/new-contract/ (mounted as <CreateNewContract/>).
+  Built from a code-verified audit (reference-docs/contract-implementation-audit/), a fresh
+  source read of pricing-section-card.tsx / reseller-pricing-table.tsx / price-slab.ts /
+  config.tsx / group-dealer/config.tsx, and cross-checked screenshot-by-screenshot against
+  the real app (Individual Dealer, Group Dealer, Reseller) — first pass had the per-customer-
+  type CSS gating missing entirely, which is why the customer-type toggle looked broken.
+  Purpose: let changes to this flow be tried out visually here first, before touching the
+  real React/Redux implementation.
+
+  Ground truth this prototype follows:
+    - NOT a step wizard. It's a single scrollable page of numbered, collapsible section
+      cards (SectionWrapper), rendered top-to-bottom, with a persistent Billing Summary
+      card below all sections and a sticky bottom action bar.
+    - Customer Type (in section 1) branches the whole form into one of three pricing
+      models, swapped live via the selector below:
+        Individual Dealer — single rooftop, per-rooftop Studio + Vini pricing fields.
+                            Only customer type with Customer Sub Type + Select Products
+                            fields, and the "View Pricing Slabs" external link.
+        Group Dealer      — bundles of rooftops (Create a product bundle + Add Rooftop
+                            Details replace sections 3-4), billing scaled per-rooftop.
+                            Also drops Customer Sub Type + Select Products (product choice
+                            happens per-bundle instead); Billing Summary becomes section
+                            "8." (numbered, unlike the other two) with an extra Bundle
+                            Types Rooftop Count column and no Discount Applied column, and
+                            plain "Total X" rows instead of the boxed "Net X Payable" panel.
+        Reseller          — no per-rooftop fields; a 2-D rooftop-band x usage-tier slab
+                            matrix instead (product-selection checkbox label is
+                            "Conversational AI", not "Vini AI"). Customer Sub Type and
+                            Select Products hidden (both products auto-included); Cooloff
+                            Period appears in Terms & Conditions; One-Time Fee column and
+                            the Net-payable box drop out of the Billing Summary. Vini's
+                            usage metric is per-agent: Sales Inbound bills per Cars Sold,
+                            the other three per Calls.
+    - Section order (Individual Dealer / Reseller): 1 Basic Details, 2 Customer Details,
+      3 Studio Plans and Pricing, 4 Vini Ai Agents and Pricing, 5 Signatory Details,
+      6 Billing Details, 7 Terms & Conditions.
+    - Section order (Group Dealer): swaps 3-4 for "Create a product bundle" and
+      "Add Rooftop Details"; Customer Details gains Contracted Rooftops + Billing To
+      (inserted right after Brand Name, ahead of Region).
+    - The per-rooftop Vini volume matrix's unit labels are dealer-language-specific, not
+      generic counts: Sales Inbound = "Cars sold/month", Service Inbound = "ROs/month",
+      both Outbound rows = "Leads/month".
+    - Styling approximates the app's real Tailwind tokens (primary #4600F2, gray-lighter
+      #F8F9FC, gray-lightest #F2F4F7, typography80 #333, typography60 #666, border10
+      rgba(0,0,0,.1)) re-implemented as plain CSS — no build step, no access to app code.
+
+  Interactivity implemented: section collapse/expand, customer-type switch with confirm
+  modal (re-branches the whole form), add/remove bundles, add/remove rooftop rows, add/
+  remove signatory POC emails, reseller slab-panel toggle. Pricing math is NOT wired up —
+  all $ figures are static placeholders, same as other prototypes in this folder.
+-->
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --primary: #4600F2;
+  --primary-soft: rgba(70,0,242,0.08);
+  --primary-hover: #3800c2;
+  --backdrop: #F9FAFB;
+  --surface: #ffffff;
+  --gray-lighter: #F8F9FC;
+  --gray-lightest: #F2F4F7;
+  --text: #333333;
+  --text-strong: #1a1a1a;
+  --muted: #666666;
+  --muted-2: #999999;
+  --border: rgba(0,0,0,0.1);
+  --border-soft: rgba(0,0,0,0.08);
+  --error: #d92d20;
+  --error-bg: #FEF3F2;
+  --success: #039855;
+  --success-bg: #ECFDF3;
+  --radius: 12px;
+  --shadow-card: 0px 2px 16px -4px rgba(0,0,0,0.16);
+  --shadow-modal: 0px 20px 24px -4px rgba(16,24,40,0.08), 0px 8px 8px -4px rgba(16,24,40,0.03);
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+  background: var(--backdrop);
+  color: var(--text);
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+/* proto chrome */
+.proto-notice {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-bottom: 1px solid #d8c8fa;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.proto-notice .tag {
+  background: var(--primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.page { max-width: 980px; margin: 0 auto; padding: 20px 24px 140px; }
+
+/* top bar */
+.top-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.back-btn {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text);
+}
+.top-bar h1 { font-size: 19px; font-weight: 700; color: var(--text-strong); }
+.top-bar .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.ct-switcher {
+  margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted);
+}
+.ct-switcher select {
+  font-weight: 600; color: var(--primary); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; background: #fff; cursor: pointer;
+}
+
+/* customer-type branching — these are the rules that actually gate which fields show */
+body.ct-group .nongroup-only { display: none; }
+body:not(.ct-group) .grp-only { display: none; }
+body:not(.ct-reseller) .reseller-only { display: none; }
+body.ct-reseller .individual-only { display: none; }
+body:not(.ct-individual) .subtype-field { display: none; }
+body:not(.ct-individual) .products-field { display: none; }
+body:not(.ct-reseller) .cooloff-field { display: none; }
+body.ct-reseller .onetime-col { display: none; }
+body:not(.ct-individual) .net-box { display: none; }
+body.ct-group .discount-col { display: none; }
+body:not(.ct-group) .group-only-field { display: none; }
+/* Integration Cost Summary (section 5): Individual + Group only, not Reseller. */
+body.ct-reseller .nonreseller-only { display: none; }
+
+/* section card */
+.section-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; cursor: pointer; user-select: none;
+}
+.section-header .htitle { display: flex; align-items: center; gap: 10px; }
+.section-header h2 { font-size: 14px; font-weight: 700; color: var(--text-strong); }
+.section-header .edit-link { font-size: 12px; color: var(--primary); font-weight: 600; text-decoration: none; margin-left: 10px; }
+.section-header .external-link { font-size: 12px; color: var(--primary); font-weight: 600; text-decoration: none; }
+.chevron { width: 18px; height: 18px; flex-shrink: 0; transition: transform 0.15s ease; color: var(--muted); }
+.section-card.collapsed .chevron { transform: rotate(-90deg); }
+.section-body {
+  padding: 4px 20px 20px; border-top: 1px solid var(--border-soft);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px;
+}
+.section-card.collapsed .section-body { display: none; }
+.section-card.section-disabled { opacity: 0.6; }
+.section-card.section-disabled .section-header { cursor: not-allowed; }
+.section-card.section-disabled .section-header h2 { color: var(--muted-2); }
+.section-card.section-disabled .chevron { color: var(--muted-2); }
+.section-body.single-col { grid-template-columns: 1fr; }
+.field-full { grid-column: 1 / -1; }
+
+/* fields */
+.field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+.field label .req { color: var(--error); }
+.field input[type="text"], .field input[type="email"], .field input[type="number"], .field select, .field textarea {
+  width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13px; color: var(--text); background: #fff; font-family: inherit;
+}
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--primary); }
+.hint { font-size: 11px; color: var(--muted-2); }
+.field .hint { margin-top: 4px; }
+.slab-panel p.hint { font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
+table.tbl td .hint { margin-top: 3px; }
+.field .error-text { font-size: 11px; color: var(--error); margin-top: 4px; }
+.field.disabled input, .field.disabled select { background: var(--gray-lighter); color: var(--muted-2); cursor: not-allowed; }
+
+.phone-field { display: flex; gap: 6px; }
+.phone-field select { width: 78px; flex-shrink: 0; }
+
+.checkbox-row { display: flex; flex-wrap: wrap; gap: 20px; }
+.checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.checkbox-item input { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+.checkbox-item.disabled { color: var(--muted-2); }
+.checkbox-item .badge {
+  font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--gray-lightest); color: var(--muted);
+  font-weight: 600; text-transform: uppercase;
+}
+
+.radio-row { display: flex; gap: 24px; }
+.radio-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.radio-item input { accent-color: var(--primary); }
+
+/* email list */
+.email-list-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.email-list-row input { flex: 1; }
+.icon-btn { width: 30px; height: 30px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px; background: #fff; display:flex; align-items:center; justify-content:center; cursor: pointer; color: var(--muted); }
+.icon-btn:hover { border-color: var(--error); color: var(--error); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.add-link { font-size: 12px; color: var(--primary); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; }
+
+/* nested card / bundle */
+.subcard {
+  border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: var(--gray-lighter);
+  margin-bottom: 4px;
+}
+.subcard-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; cursor: pointer; }
+.subcard-header .title { font-size: 13px; font-weight: 700; color: var(--text-strong); }
+.subcard-body { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.subcard-body.collapsed { display: none; }
+
+.inline-pricing-block { grid-column: 1 / -1; border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 2px; }
+.inline-pricing-block .block-title { font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.bundle-fee-lines { margin-top: 10px; border-top: 1px solid var(--border-soft); padding-top: 8px; }
+.rooftop-sum-check { font-size: 12px; font-weight: 600; padding: 8px 12px; border-radius: 8px; }
+.rooftop-sum-check.ok { color: var(--success); background: var(--success-bg); }
+.rooftop-sum-check.mismatch { color: var(--error); background: var(--error-bg); }
+
+/* tables */
+.data-table { grid-column: 1 / -1; overflow-x: auto; }
+table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.tbl th { background: var(--gray-lightest); color: var(--muted); font-weight: 600; text-align: left; padding: 9px 10px; border: 1px solid var(--border-soft); white-space: nowrap; }
+table.tbl td { padding: 7px 10px; border: 1px solid var(--border-soft); vertical-align: middle; }
+table.tbl tbody tr:nth-child(even) { background: rgba(0,0,0,0.015); }
+table.tbl input[type="number"], table.tbl input[type="text"] { width: 100%; min-width: 70px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; }
+table.tbl select { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; }
+table.tbl td.readonly { color: var(--muted); background: var(--gray-lighter); }
+table.tbl td.center { text-align: center; }
+table.tbl td.right { text-align: right; }
+.edit-btn { font: inherit; font-size: 12.5px; color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; cursor: pointer; text-align: left; }
+.edit-btn:hover { border-color: var(--primary); }
+.tbl-empty-row td { text-align: center; color: var(--muted-2); font-style: italic; padding: 16px; }
+
+.slab-toggle { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; }
+.slab-toggle .link, .pricing-model-row .link { font-size: 12.5px; color: var(--primary); font-weight: 600; cursor: pointer; }
+.pricing-model-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: -6px; }
+.pm-label { font-size: 13px; font-weight: 700; color: var(--text-strong); }
+.pm-sub { font-size: 12px; font-weight: 400; color: var(--muted-2); margin-left: 8px; }
+.breakdown-header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.breakdown-header span:first-child { font-size: 13px; font-weight: 700; color: var(--text-strong); }
+.req-price-badge { font-size: 11px; font-weight: 600; color: var(--primary); background: var(--primary-soft); border-radius: 999px; padding: 3px 10px; }
+.slab-panel { grid-column: 1 / -1; background: var(--gray-lighter); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; display: none; }
+.slab-panel.open { display: block; }
+.slab-panel h4 { font-size: 12.5px; font-weight: 700; margin-bottom: 10px; color: var(--text-strong); }
+.slab-panel .slab-plan-select { margin-bottom: 10px; width: 220px; }
+
+.waive-panel { grid-column: 1 / -1; background: var(--primary-soft); border-radius: 10px; padding: 12px 16px; margin-top: 6px; }
+.waive-row-label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.waive-row-label .note { font-size: 11px; color: var(--muted-2); font-weight: 400; }
+.waive-row { display: flex; align-items: center; justify-content: space-between; padding: 2px 0; font-size: 13px; }
+.waive-row .note { font-size: 11px; color: var(--muted-2); }
+.waive-panel > .note { font-size: 11px; color: var(--muted); }
+
+.breakdown-note { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted-2); font-style: italic; }
+
+.upload-csv-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+
+.tooltip-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.tooltip-wrap .qmark { width: 15px; height:15px; border-radius: 50%; background: var(--gray-lightest); color: var(--muted); font-size: 10px; font-weight: 700; display:flex; align-items:center; justify-content:center; cursor: help; }
+.tooltip-wrap .tip { display:none; position: absolute; bottom: 22px; left: 0; width: 220px; background: var(--text-strong); color: #fff; font-size: 11px; padding: 8px 10px; border-radius: 8px; line-height: 1.4; z-index: 5; }
+.tooltip-wrap:hover .tip { display:block; }
+
+/* buttons */
+.btn { font-size: 13px; font-weight: 600; border-radius: 8px; padding: 9px 16px; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 6px; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-bordered { background: #fff; border-color: var(--border); color: var(--text); }
+.btn-bordered:hover { border-color: var(--muted); }
+.btn-light { background: var(--gray-lightest); color: var(--text); }
+.btn-light:hover { background: var(--border-soft); }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* billing summary */
+.summary-card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-card); padding: 20px; margin-bottom: 16px; }
+.summary-card h2 { font-size: 14px; font-weight: 700; margin-bottom: 4px; color: var(--text-strong); }
+.summary-card .subhead { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+table.summary-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 14px; }
+table.summary-tbl th { text-align: left; padding: 8px 10px; background: var(--gray-lightest); color: var(--muted); font-weight: 600; border: 1px solid var(--border-soft); }
+table.summary-tbl td { padding: 8px 10px; border: 1px solid var(--border-soft); }
+table.summary-tbl tr.total-row td { font-weight: 700; background: var(--gray-lighter); }
+.summary-meta-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 6px 0; border-bottom: 1px dashed var(--border-soft); }
+.summary-meta-row:last-of-type { border-bottom: none; }
+.summary-meta-row .val { font-weight: 600; color: var(--text-strong); }
+.summary-meta-row.bold { font-weight: 700; font-size: 13px; }
+.summary-meta-row.bold .val { font-weight: 700; }
+.plain-totals { margin-top: 14px; border-top: 1px solid var(--border-soft); padding-top: 10px; }
+.net-box { margin-top: 14px; border: 1px solid #d8c8fa; background: var(--primary-soft); border-radius: 10px; padding: 14px 16px; }
+.net-box .net-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; font-weight: 600; color: var(--text-strong); }
+.net-box .foot { font-size: 11px; color: var(--muted); margin-top: 8px; }
+.net-box .foot ul { padding-left: 16px; margin-top: 4px; }
+
+/* action bar */
+.action-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--border);
+  padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 -4px 16px rgba(0,0,0,0.05);
+  z-index: 30;
+}
+.action-bar .right { display: flex; gap: 10px; }
+
+/* modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.45); display: none; align-items: center; justify-content: center; z-index: 50; }
+.modal-overlay.open { display: flex; }
+.modal-box { background: #fff; border-radius: 14px; box-shadow: var(--shadow-modal); width: 420px; max-width: 92vw; padding: 24px; text-align: center; }
+.modal-box .icon-circle { width: 44px; height: 44px; border-radius: 50%; background: var(--error-bg); color: var(--error); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 20px; font-weight: 700; }
+.modal-box h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text-strong); }
+.modal-box p { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.modal-box .warn { font-size: 12px; color: var(--error); background: var(--error-bg); border-radius: 8px; padding: 8px 10px; margin-bottom: 14px; text-align: left; }
+.modal-box .actions { display: flex; gap: 10px; margin-top: 6px; }
+.modal-box .actions .btn { flex: 1; justify-content: center; }
+.modal-box.left { text-align: left; }
+.modal-box.wide { width: 560px; }
+.modal-box textarea { width: 100%; height: 220px; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 12.5px; font-family: inherit; resize: vertical; }
+
+@media (max-width: 720px) {
+  .section-body, .subcard-body { grid-template-columns: 1fr; }
+  .action-bar { flex-direction: column; gap: 10px; align-items: stretch; }
+  .action-bar .right { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body class="ct-individual">
+
+<div class="proto-notice">
+  <span class="tag">Prototype</span>
+  <span>Standalone mockup of the live "Create New Contract" flow — structure only, not wired to the real form. Use the Customer Type switcher to compare Individual Dealer / Group Dealer / Reseller layouts.</span>
+</div>
+
+<div class="page">
+
+  <div class="top-bar">
+    <button class="back-btn" title="Back">←</button>
+    <div>
+      <h1 id="pageTitle">Create New Contract</h1>
+      <div class="sub">Enterprise: Acme Motors Group &nbsp;·&nbsp; Draft ID: DRF-20394</div>
+    </div>
+    <div class="ct-switcher">
+      Customer Type:
+      <select id="ctPreview">
+        <option value="individual">Individual Dealer</option>
+        <option value="group">Group Dealer</option>
+        <option value="reseller">Reseller</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 1. Basic Details -->
+  <div class="section-card" data-section>
+    <div class="section-header" data-toggle>
+      <div class="htitle"><h2>1. Basic Details</h2></div>
+      <svg class="chevron" viewBox="0 0 20 20" fill="none"><path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="section-body">
+      <div class="field">
+        <label>Deal Type <span class="req">*</span></label>
+        <select><option>New Deal</option><option>Renewal</option><option>Migration</option></select>
+      </div>
+      <div class="field">
+        <label>Customer Type <span class="req">*</span></label>
+        <select id="ctSelect">
+          <option value="individual">Individual Dealer</option>
+          <option value="group">Group Dealer</option>
+          <option value="reseller">Reseller</option>
+        </select>
+      </div>
+      <div class="field subtype-field">
+        <label>Customer Sub Type <span class="req">*</span></label>
+        <select id="subTypeSelect">
+          <option>New Dealer</option>
+          <option>Existing Dealer</option>
+          <option id="mixedOption">Mixed</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Currency <span class="req">*</span></label>
+        <select><option>USD ($)</option><option>INR (₹)</option><option>AED (د.إ)</option></select>
+      </div>
+      <div class="field">
+        <label>Select Manager <span class="req">*</span></label>
+        <select><option>—</option><option>Priya Menon (AM)</option><option>Rahul Shah (AM)</option></select>
+      </div>
+      <div class="field products-field">
+        <label>Select Products <span class="req">*</span></label>
+        <div class="checkbox-row" style="margin-top:8px;">
+          <label class="checkbox-item"><input type="checkbox" checked id="selectProductStudio" onchange="onSelectProductsChange()"> Studio AI</label>
+          <label class="checkbox-item"><input type="checkbox" checked id="selectProductVini" onchange="onSelectProductsChange()"> Conversational AI</label>
+        </div>
+      </div>
+      <div class="field reseller-only field-full">
+        <div class="hint">Both Studio AI and Conversational AI are auto-included on Reseller contracts (enterprise-slab pricing) — no per-product toggle in the live form.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Customer Details -->
+  <div class="section-card" data-section>
+    <div class="section-header" data-toggle>
+      <div class="htitle"><h2>2. Customer Details</h2></div>
+      <svg class="chevron" viewBox="0 0 20 20" fill="none"><path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="section-body">
+      <div class="field" style="order:1"><label>Legal Name <span class="req">*</span></label><input type="text" value="Acme Motors Group LLC"></div>
+      <div class="field" style="order:2"><label>Brand Name <span class="req">*</span></label><input type="text" value="Acme Motors"></div>
+      <div class="field group-only-field" style="order:3"><label>Contracted Rooftops <span class="req">*</span></label><input type="number" value="8" id="contractedRooftopsInput"></div>
+      <div class="field group-only-field" style="order:4"><label>Billing to <span class="req">*</span></label><select><option>Enterprise (consolidated)</option><option>Per Rooftop</option></select></div>
+      <div class="field" style="order:5"><label>Region <span class="req">*</span></label><select><option>West</option><option>Midwest</option><option>Northeast</option><option>South</option></select></div>
+      <div class="field" style="order:6"><label>Street Address <span class="req">*</span></label><input type="text" value="4820 W Colonial Dr"></div>
+      <div class="field" style="order:7"><label>Country <span class="req">*</span></label><input type="text" value="United States"></div>
+      <div class="field" style="order:8"><label>Pin/Zip Code <span class="req">*</span></label><input type="text" value="32808"></div>
+      <div class="field" style="order:9"><label>City <span class="req">*</span></label><input type="text" value="Orlando"></div>
+      <div class="field" style="order:10"><label>State <span class="req">*</span></label><input type="text" value="Florida"></div>
+    </div>
+  </div>
+
+  <!-- 3/4. Studio + Vini (Individual / Reseller) -->
+  <div class="nongroup-only">
+    <div class="section-card" data-section id="studioSectionCard">
+      <div class="section-header" data-toggle>
+        <div class="htitle"><h2>3. Studio Plans and Pricing</h2></div>
+        <a class="external-link individual-only" onclick="event.stopPropagation()">View Pricing Slabs</a>
+        <svg class="chevron" viewBox="0 0 20 20" fill="none"><path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="section-body">
+
+        <!-- Individual Dealer: per-rooftop fields -->
+        <div class="field individual-only"><label>Plan Type <span class="req">*</span></label>
+          <select id="indStudioPlan" onchange="onIndStudioChange()"><option value="">Select Plan</option><option value="lite">Lite</option><option value="pro">Pro</option></select>
+        </div>
+        <div class="field individual-only"><label>VINs per rooftop <span class="req">*</span></label><input type="number" id="indStudioVins" value="120" oninput="onIndStudioChange()"></div>
+        <div class="field individual-only"><label>Existing Inventory per Rooftop</label><input type="number" id="indStudioExistingInv" value="45"></div>
+        <div class="field individual-only">
+          <label>CJI Provider <span class="req">*</span></label>
+          <select id="indCjiProvider" onchange="onIntegrationFieldChange('cji')">
+            <option value="none">Not integrated</option>
+            <option value="evox" selected>evox</option>
+            <option value="custom">Custom integration cost…</option>
+          </select>
+          <div class="hint" id="indCjiHint"></div>
+        </div>
+        <div class="field individual-only field-full" id="indCjiCustomWrap" style="display:none;">
+          <label>Custom integration cost (one-time / monthly)</label>
+          <div style="display:flex; gap:8px; max-width:300px;">
+            <input type="number" min="0" placeholder="One-time" id="indCjiCustomOneTime" oninput="onIntegrationFieldChange('cji')">
+            <input type="number" min="0" placeholder="Monthly" id="indCjiCustomMonthly" oninput="onIntegrationFieldChange('cji')">
+          </div>
+        </div>
+        <div class="field individual-only field-full">
+          <label>Add-on Purchases</label>
+          <div class="checkbox-row" style="margin-top:8px;">
+            <label class="checkbox-item"><input type="checkbox" id="indAddonSmartMatch" onchange="onIndStudioChange()"> Smart Match <span class="badge">Monthly</span></label>
+            <label class="checkbox-item"><input type="checkbox" id="indAddonSmartCampaign" onchange="onIndStudioChange()"> Smart Campaign <span class="badge">Monthly</span></label>
+          </div>
+        </div>
+        <div class="data-table individual-only" id="studioBreakdownMount"></div>
+
+        <!-- Reseller: slab-priced matrix -->
+        <div class="reseller-only field-full pricing-model-row">
+          <span class="pm-label">Pricing Model <span class="req">*</span> <span class="pm-sub">Rooftops basis</span></span>
+          <span class="link" data-slab-toggle="studio">🗂️ View slab pricing</span>
+        </div>
+        <div class="reseller-only field-full hint" style="margin-top:-6px;">Any row you start filling in must be completed — rooftops, usage, and offered price all required. At least one Studio or Vini row is required across the whole contract.</div>
+        <div class="data-table reseller-only">
+          <table class="tbl" data-reseller-table="studio">
+            <thead><tr><th style="width:30%">Product</th><th>Rooftops</th><th>Usage</th><th>Cost Price ($)</th><th>Offered Price ($)</th><th>Disc %</th></tr></thead>
+            <tbody>
+              <tr data-row-key="lite">
+                <td><label class="checkbox-item"><input type="checkbox" checked data-f="enabled"> Studio Lite</label></td>
+                <td><input type="number" value="10" data-f="rooftops"></td>
+                <td><input type="number" value="100" placeholder="VINs" data-f="usage"><div class="hint">VINs / Rooftop</div></td>
+                <td class="readonly" data-f="cost">$—</td>
+                <td><input type="number" data-f="offered"></td>
+                <td><input type="number" data-f="disc"></td>
+              </tr>
+              <tr data-row-key="pro">
+                <td><label class="checkbox-item"><input type="checkbox" checked data-f="enabled"> Studio Pro</label></td>
+                <td><input type="number" value="10" data-f="rooftops"></td>
+                <td><input type="number" value="100" placeholder="VINs" data-f="usage"><div class="hint">VINs / Rooftop</div></td>
+                <td class="readonly" data-f="cost">$—</td>
+                <td><input type="number" data-f="offered"></td>
+                <td><input type="number" data-f="disc"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="slab-panel reseller-only" id="slabPanelStudio">
+          <h4>Agreed Slab Rate Card — Studio ($/rooftop/month)</h4>
+          <p class="hint" style="margin-bottom:10px;">Studio Lite</p>
+          <table class="tbl" style="margin-bottom:14px;">
+            <thead><tr><th>Rooftops ↓ / VINs →</th><th>0–50</th><th>51–100</th><th>101–200</th><th>200+</th></tr></thead>
+            <tbody>
+              <tr><td>0–10</td><td>$129</td><td>$119</td><td>$109</td><td>$99</td></tr>
+              <tr><td>11–50</td><td>$119</td><td>$109</td><td>$99</td><td>$89</td></tr>
+              <tr><td>51–100</td><td>$109</td><td>$99</td><td>$89</td><td>$79</td></tr>
+              <tr><td>100+</td><td>—</td><td>$89</td><td>$79</td><td>$69</td></tr>
+            </tbody>
+          </table>
+          <p class="hint" style="margin-bottom:10px;">Studio Pro</p>
+          <table class="tbl">
+            <thead><tr><th>Rooftops ↓ / VINs →</th><th>0–50</th><th>51–100</th><th>101–200</th><th>200+</th></tr></thead>
+            <tbody>
+              <tr><td>0–10</td><td>$289</td><td>$269</td><td>$249</td><td>$229</td></tr>
+              <tr><td>11–50</td><td>$269</td><td>$249</td><td>$229</td><td>$209</td></tr>
+              <tr><td>51–100</td><td>$249</td><td>$229</td><td>$209</td><td>$189</td></tr>
+              <tr><td>100+</td><td>—</td><td>$209</td><td>$189</td><td>$169</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="waive-panel reseller-only">
+          <div class="waive-row-label">One-time Setup Fee: <strong>Charged as per actual</strong> <span class="note">(vendor-specific, per rooftop)</span></div>
+          <div class="waive-row">
+            <label class="checkbox-item"><input type="checkbox"> Waive One-time Setup Fee</label>
+          </div>
+          <div class="note" style="margin-top:4px;">I confirm that customer agrees to a 6/12 month lock-in period OR does 6/12 months advance payment</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="section-card" data-section id="viniSectionCard">
+      <div class="section-header" data-toggle>
+        <div class="htitle"><h2>4. Vini Ai Agents and Pricing</h2></div>
+        <a class="external-link individual-only" onclick="event.stopPropagation()">View Pricing Slabs</a>
+        <svg class="chevron" viewBox="0 0 20 20" fill="none"><path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="section-body">
+        <div class="field-full">
+          <label>Select VINI Agents <span class="req">*</span></label>
+          <div class="checkbox-row" style="margin-top:8px;">
+            <label class="checkbox-item"><input type="checkbox" checked id="indViniEnableInboundSales" onchange="onIndViniChange()"> Sales Inbound</label>
+            <label class="checkbox-item"><input type="checkbox" id="indViniEnableOutboundSales" onchange="onIndViniChange()"> Sales Outbound</label>
+            <label class="checkbox-item"><input type="checkbox" checked id="indViniEnableInboundService" onchange="onIndViniChange()"> Service Inbound</label>
+            <label class="checkbox-item"><input type="checkbox" id="indViniEnableOutboundService" onchange="onIndViniChange()"> Service Outbound</label>
+            <label class="checkbox-item"><input type="checkbox"> Reception Web Chat</label>
+          </div>
+        </div>
+
+        <!-- Individual Dealer: integration providers, gated by the agent checkboxes above -->
+        <div class="field individual-only" id="indCrmField" style="display:none;">
+          <label>Sales CRM Provider <span class="req">*</span></label>
+          <select id="indCrmProvider" onchange="onIntegrationFieldChange('crm')">
+            <option value="none">Not integrated</option>
+            <option value="drivecentric" selected>DriveCentric</option>
+            <option value="elead">Elead</option>
+            <option value="reynoldssales">Reynolds Sales</option>
+            <option value="custom">Custom integration cost…</option>
+          </select>
+          <div class="hint" id="indCrmHint"></div>
+        </div>
+        <div class="field individual-only field-full" id="indCrmCustomWrap" style="display:none;">
+          <label>Custom integration cost (one-time / monthly)</label>
+          <div style="display:flex; gap:8px; max-width:300px;">
+            <input type="number" min="0" placeholder="One-time" id="indCrmCustomOneTime" oninput="onIntegrationFieldChange('crm')">
+            <input type="number" min="0" placeholder="Monthly" id="indCrmCustomMonthly" oninput="onIntegrationFieldChange('crm')">
+          </div>
+        </div>
+        <div class="field individual-only" id="indServiceField" style="display:none;">
+          <label>Service Scheduler Provider <span class="req">*</span></label>
+          <select id="indServiceProvider" onchange="onIntegrationFieldChange('service')">
+            <option value="none">Not integrated</option>
+            <option value="mykaarma" selected>MyKaarma</option>
+            <option value="xtime">xTime</option>
+            <option value="custom">Custom integration cost…</option>
+          </select>
+          <div class="hint" id="indServiceHint"></div>
+        </div>
+        <div class="field individual-only field-full" id="indServiceCustomWrap" style="display:none;">
+          <label>Custom integration cost (one-time / monthly)</label>
+          <div style="display:flex; gap:8px; max-width:300px;">
+            <input type="number" min="0" placeholder="One-time" id="indServiceCustomOneTime" oninput="onIntegrationFieldChange('service')">
+            <input type="number" min="0" placeholder="Monthly" id="indServiceCustomMonthly" oninput="onIntegrationFieldChange('service')">
+          </div>
+        </div>
+        <div class="field individual-only" id="indDmsField" style="display:none;">
+          <label>DMS Provider <span class="req">*</span></label>
+          <select id="indDmsProvider" onchange="onIntegrationFieldChange('dms')">
+            <option value="none">Not integrated</option>
+            <option value="frazer" selected>Frazer</option>
+            <option value="pbsdms">PBS (price pending)</option>
+            <option value="custom">Custom integration cost…</option>
+          </select>
+          <div class="hint" id="indDmsHint"></div>
+        </div>
+        <div class="field individual-only field-full" id="indDmsCustomWrap" style="display:none;">
+          <label>Custom integration cost (one-time / monthly)</label>
+          <div style="display:flex; gap:8px; max-width:300px;">
+            <input type="number" min="0" placeholder="One-time" id="indDmsCustomOneTime" oninput="onIntegrationFieldChange('dms')">
+            <input type="number" min="0" placeholder="Monthly" id="indDmsCustomMonthly" oninput="onIntegrationFieldChange('dms')">
+          </div>
+        </div>
+
+        <!-- Individual Dealer: volume matrix -->
+        <div class="data-table individual-only">
+          <table class="tbl">
+            <thead><tr><th></th><th>Sales Agent</th><th>Service Agent</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Inbound Volume</strong></td>
+                <td><input type="number" id="indViniInboundSales" value="300" placeholder="Cars sold/month" oninput="onIndViniChange()"><div class="hint">Cars sold/month</div></td>
+                <td><input type="number" id="indViniInboundService" value="450" placeholder="ROs/month" oninput="onIndViniChange()"><div class="hint">ROs/month</div></td>
+              </tr>
+              <tr><td><strong>Outbound Attempts</strong></td>
+                <td><input type="number" id="indViniOutboundSales" value="0" placeholder="Leads/month" oninput="onIndViniChange()"><div class="hint">Leads/month</div></td>
+                <td><input type="number" id="indViniOutboundService" value="0" placeholder="Leads/month" oninput="onIndViniChange()"><div class="hint">Leads/month</div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="data-table individual-only" id="viniBreakdownMount"></div>
+
+        <!-- Reseller: slab-priced matrix -->
+        <div class="reseller-only field-full pricing-model-row">
+          <span class="pm-label">Pricing Model <span class="req">*</span> <span class="pm-sub">Rooftops basis</span></span>
+          <span class="link" data-slab-toggle="vini">🗂️ View slab pricing</span>
+        </div>
+        <div class="data-table reseller-only">
+          <table class="tbl" data-reseller-table="vini">
+            <thead><tr><th style="width:28%">Product</th><th>Rooftops</th><th>Usage</th><th>Cost Price ($)</th><th>Offered Price ($)</th><th>Disc %</th></tr></thead>
+            <tbody>
+              <tr data-row-key="inboundSales">
+                <td><label class="checkbox-item"><input type="checkbox" checked data-f="enabled"> Sales Inbound</label></td>
+                <td><input type="number" value="10" data-f="rooftops"></td>
+                <td><input type="number" value="100" placeholder="Cars" data-f="usage"><div class="hint">Cars Sold / Rooftop</div></td>
+                <td class="readonly" data-f="cost">$—</td><td><input type="number" data-f="offered"></td><td><input type="number" data-f="disc"></td>
+              </tr>
+              <tr data-row-key="outboundSales">
+                <td><label class="checkbox-item"><input type="checkbox" data-f="enabled"> Sales Outbound</label></td>
+                <td><input type="number" value="10" data-f="rooftops"></td>
+                <td><input type="number" value="0" placeholder="Leads" data-f="usage"><div class="hint">Leads / Rooftop</div></td>
+                <td class="readonly" data-f="cost">$—</td><td><input type="number" data-f="offered"></td><td><input type="number" data-f="disc"></td>
+              </tr>
+              <tr data-row-key="inboundService">
+                <td><label class="checkbox-item"><input type="checkbox" checked data-f="enabled"> Service Inbound</label></td>
+                <td><input type="number" value="10" data-f="rooftops"></td>
+                <td><input type="number" value="100" placeholder="ROs" data-f="usage"><div class="hint">ROs / Rooftop</div></td>
+                <td class="readonly" data-f="cost">$—</td><td><input type="number" data-f="offered"></td><td><input type="number" data-f="disc"></td>
+              </tr>
+              <tr data-row-key="outboundService">
+                <td><label class="checkbox-item"><input type="checkbox" data-f="enabled"> Service Outbound</label></td>
+                <td><input type="number" value="10" data-f="rooftops"></td>
+                <td><input type="number" value="0" placeholder="Leads" data-f="usage"><div class="hint">Leads / Rooftop</div></td>
+                <td class="readonly" data-f="cost">$—</td><td><input type="number" data-f="offered"></td><td><input type="number" data-f="disc"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="slab-panel reseller-only" id="slabPanelVini">
+          <h4>Agreed Slab Rate Card — Vini AI ($/rooftop/month)</h4>
+          <p class="hint" style="margin-bottom:10px;">Sales Inbound — per Cars</p>
+          <table class="tbl" style="margin-bottom:14px;">
+            <thead><tr><th>Rooftops ↓ / Cars →</th><th>0–50</th><th>51–100</th><th>101–300</th><th>300+</th></tr></thead>
+            <tbody>
+              <tr><td>0–10</td><td>$1.05</td><td>$0.95</td><td>$0.88</td><td>$0.80</td></tr>
+              <tr><td>11–50</td><td>$0.95</td><td>$0.88</td><td>$0.80</td><td>$0.72</td></tr>
+              <tr><td>51–100</td><td>$0.88</td><td>$0.80</td><td>$0.72</td><td>$0.65</td></tr>
+              <tr><td>100+</td><td>—</td><td>$0.72</td><td>$0.65</td><td>$0.58</td></tr>
+            </tbody>
+          </table>
+          <p class="hint" style="margin-bottom:10px;">Sales Outbound — per Calls</p>
+          <table class="tbl" style="margin-bottom:14px;">
+            <thead><tr><th>Rooftops ↓ / Calls →</th><th>0–300</th><th>301–750</th><th>751–1000</th><th>1000+</th></tr></thead>
+            <tbody>
+              <tr><td>0–10</td><td>$1.15</td><td>$1.05</td><td>$0.98</td><td>$0.90</td></tr>
+              <tr><td>11–50</td><td>$1.05</td><td>$0.98</td><td>$0.90</td><td>$0.82</td></tr>
+              <tr><td>51–100</td><td>$0.98</td><td>$0.90</td><td>$0.82</td><td>$0.75</td></tr>
+              <tr><td>100+</td><td>—</td><td>$0.82</td><td>$0.75</td><td>$0.68</td></tr>
+            </tbody>
+          </table>
+          <p class="hint" style="margin-bottom:10px;">Service Inbound — per Calls</p>
+          <table class="tbl" style="margin-bottom:14px;">
+            <thead><tr><th>Rooftops ↓ / Calls →</th><th>0–300</th><th>301–750</th><th>751–1000</th><th>1000+</th></tr></thead>
+            <tbody>
+              <tr><td>0–10</td><td>$0.95</td><td>$0.85</td><td>$0.78</td><td>$0.70</td></tr>
+              <tr><td>11–50</td><td>$0.85</td><td>$0.78</td><td>$0.70</td><td>$0.62</td></tr>
+              <tr><td>51–100</td><td>$0.78</td><td>$0.70</td><td>$0.62</td><td>$0.55</td></tr>
+              <tr><td>100+</td><td>—</td><td>$0.62</td><td>$0.55</td><td>$0.48</td></tr>
+            </tbody>
+          </table>
+          <p class="hint" style="margin-bottom:10px;">Service Outbound — per Calls</p>
+          <table class="tbl">
+            <thead><tr><th>Rooftops ↓ / Calls →</th><th>0–300</th><th>301–750</th><th>751–1000</th><th>1000+</th></tr></thead>
+            <tbody>
+              <tr><td>0–10</td><td>$1.00</td><td>$0.90</td><td>$0.82</td><td>$0.74</td></tr>
+              <tr><td>11–50</td><td>$0.90</td><td>$0.82</td><td>$0.74</td><td>$0.66</td></tr>
+              <tr><td>51–100</td><td>$0.82</td><td>$0.74</td><td>$0.66</td><td>$0.58</td></tr>
+              <tr><td>100+</td><td>—</td><td>$0.66</td><td>$0.58</td><td>$0.50</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="waive-panel reseller-only">
+          <div class="waive-row-label">One-time Integration Fee: <strong>Charged as per actual</strong> <span class="note">(vendor-specific, per rooftop)</span></div>
+          <div class="waive-row">
+            <label class="checkbox-item"><input type="checkbox"> Waive One-time Integration Fee</label>
+          </div>
+          <div class="note" style="margin-top:4px;">I confirm that customer agrees to a 6/12 month lock-in period OR does 6/12 months advance payment</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3/4. Group Dealer bundles + rooftops -->
+  <div class="grp-only">
+    <div class="section-card" data-section>
+      <div class="section-header" data-toggle>
+        <div class="htitle"><h2>3. Create a product bundle</h2></div>
+        <a class="external-link" onclick="event.stopPropagation()">View Pricing Slabs</a>
+        <svg class="chevron" viewBox="0 0 20 20" fill="none"><path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="section-body single-col" id="bundleList"></div>
+      <div class="section-body single-col" style="padding-top:0; display:flex; align-items:center; justify-content:space-between;">
+        <span class="add-link" id="addBundleBtn">+ Add New Bundle</span>
+        <span class="tooltip-wrap"><span class="qmark">?</span><span class="tip">A Bundle is a collection of products for a group of rooftops, priced together and shared across every rooftop assigned to it.</span> What is Bundle?</span>
+      </div>
+      <div class="section-body single-col" style="padding-top:0;">
+        <div class="rooftop-sum-check" id="rooftopSumCheck"></div>
+      </div>
+    </div>
+
+    <div class="section-card" data-section>
+      <div class="section-header" data-toggle>
+        <div class="htitle"><h2>4. Add Rooftop Details</h2></div>
+        <button class="upload-csv-btn" onclick="event.stopPropagation(); alert('Prototype only — CSV upload not wired.')">⭱ Upload CSV</button>
+      </div>
+      <div class="section-body single-col">
+        <div class="data-table">
+          <table class="tbl">
+            <thead><tr><th>Rooftop Name</th><th>Rooftop SubType</th><th>Bundle Type</th><th>CJI Provider</th><th>Sales CRM</th><th>Service Scheduler</th><th>DMS Provider</th><th style="width:60px;">Action</th></tr></thead>
+            <tbody id="rooftopRows"></tbody>
+          </table>
+        </div>
+        <div class="hint" style="margin-top:6px;">Rooftop rows are generated automatically from each bundle's "Number of Rooftops" above — not added manually (matches the live form; rows only come from bundle counts or the CSV upload).</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Integration Cost Summary — Individual Dealer + Group Dealer only, hidden for Reseller
+       (see body.ct-reseller #integrationCostSection rule below). CJI/CRM/Service scheduler/DMS
+       provider selection itself lives inline on Studio/Vini (Individual) or per rooftop row
+       (Group, section 4 above) — this section just aggregates the resulting cost. -->
+  <div class="section-card nonreseller-only" data-section id="integrationCostSection">
+    <div class="section-header" data-toggle>
+      <div class="htitle"><h2>5. Integration Cost Summary</h2></div>
+      <svg class="chevron" viewBox="0 0 20 20" fill="none"><path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="section-body single-col">
+      <div class="hint" style="margin-bottom:4px;">
+        <span class="individual-only">One rooftop, so each applicable category shows at most one line. Where a provider carries a minimum guarantee (evox today), this rooftop sits on the MG floor rather than the per-rooftop marginal rate — that only kicks in once a group contract crosses the threshold.</span>
+        <span class="grp-only">Rooftops on the same provider are grouped and priced together. Where a partner sets a minimum guarantee, the flat fee covers rooftops up to its threshold and the per-rooftop rate applies only beyond it — matching how evox is contracted today.</span>
+      </div>
+      <div id="integrationSummaryMount"></div>
+      <div class="summary-meta-row bold" style="margin-top:6px;"><span>Integration cost — total (billed to dealer)</span><span class="val"><span id="integOneTimeTotal">USD 0.00</span> one-time + <span id="integMonthlyTotal">USD 0.00</span>/mo offered</span></div>
+      <div class="summary-meta-row"><span>Before discount</span><span class="val"><span id="integMonthlyCost">USD 0.00</span>/mo cost</span></div>
+    </div>
+  </div>
+
+  <!-- 6. Signatory Details -->
+  <div class="section-card" data-section>
+    <div class="section-header" data-toggle>
+      <div class="htitle"><h2>6. Signatory Details</h2></div>
+      <svg class="chevron" viewBox="0 0 20 20" fill="none"><path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="section-body">
+      <div class="field"><label>Name <span class="req">*</span></label><input type="text" value="Jordan Ellis"></div>
+      <div class="field"><label>Designation <span class="req">*</span></label><input type="text" value="General Manager"></div>
+      <div class="field"><label>Email <span class="req">*</span></label><input type="email" value="jordan.ellis@acmemotors.com"></div>
+      <div class="field">
+        <label>Contact Number <span class="req">*</span></label>
+        <div class="phone-field"><select><option>+1</option><option>+91</option><option>+971</option></select><input type="text" value="(407) 555-0148"></div>
+      </div>
+      <div class="field field-full">
+        <label>Add customer POCs <span class="tooltip-wrap"><span class="qmark">i</span><span class="tip">Additional contacts who should be copied on contract communications.</span></span></label>
+        <div id="pocList" style="margin-top:8px;"></div>
+        <span class="add-link" id="addPocBtn">+ Add another email</span>
+      </div>
+      <div class="field field-full hint" style="margin-top:4px;">Spyne Signing Entity: <strong>Spyne AI Inc</strong></div>
+    </div>
+  </div>
+
+  <!-- 7. Billing Details -->
+  <div class="section-card" data-section>
+    <div class="section-header" data-toggle>
+      <div class="htitle"><h2>7. Billing Details</h2></div>
+      <svg class="chevron" viewBox="0 0 20 20" fill="none"><path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="section-body">
+      <div class="field"><label>Billing Frequency <span class="req">*</span></label>
+        <select id="billingFrequencySelect" onchange="renderBillingSummary()">
+          <option value="1">Monthly</option><option value="3">Quarterly</option><option value="6">Half Yearly</option><option value="12">Yearly</option>
+        </select>
+      </div>
+      <div class="field"><label>Customer Finance POC Name <span class="req">*</span></label><input type="text" value="Marissa Cole"></div>
+      <div class="field"><label>Customer's Finance POC Number <span class="req">*</span></label><div class="phone-field"><select><option>+1</option><option>+91</option></select><input type="text" value="(407) 555-0177"></div></div>
+      <div class="field"><label>Customer Finance POC Email <span class="req">*</span></label><input type="email" value="ap@acmemotors.com"></div>
+      <div class="field"><label>Billing Entity <span class="req">*</span></label><select><option>Spyne AI Inc — US</option><option>Spyne Technologies Pvt Ltd — IN</option></select></div>
+      <div class="field"><label>Tax ID</label><input type="text" placeholder="Optional"></div>
+    </div>
+  </div>
+
+  <!-- 8. Terms & Conditions -->
+  <div class="section-card" data-section>
+    <div class="section-header" data-toggle>
+      <div class="htitle"><h2>8. Terms &amp; Conditions</h2></div>
+      <a class="edit-link" id="editTncLink" onclick="event.stopPropagation(); document.getElementById('tncModal').classList.add('open')">Edit T&amp;C</a>
+      <svg class="chevron" viewBox="0 0 20 20" fill="none"><path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="section-body">
+      <div class="field field-full">
+        <label>Raise through exception? <span class="req">*</span></label>
+        <div class="radio-row" style="margin-top:8px;">
+          <label class="radio-item"><input type="radio" name="exception" checked> No</label>
+          <label class="radio-item"><input type="radio" name="exception" onchange="document.getElementById('exceptionNote').style.display=this.checked?'block':'none'"> Yes</label>
+        </div>
+        <div class="error-text" id="exceptionNote" style="display:none;">Requires additional approval — a reviewer will be notified before this contract can be created.</div>
+      </div>
+      <div class="field"><label>Contract Term (Months) <span class="req">*</span></label>
+        <select id="contractTermSelect" onchange="renderBillingSummary()"><option>1</option><option selected>12</option><option>6</option><option>3</option></select>
+      </div>
+      <div class="field"><label>Lock In Period (Months)</label><input type="number" value="6"></div>
+      <div class="field"><label>Notice Period for Auto-Renewal Policy (Days)</label><input type="number" value="60"></div>
+      <div class="field"><label>Termination Days <span class="req">*</span></label><select><option>30</option><option>60</option><option>90</option></select></div>
+      <div class="field cooloff-field"><label>Cooloff Period (Days)</label><input type="number" value="15"></div>
+    </div>
+  </div>
+
+  <!-- Billing Summary -->
+  <div class="summary-card">
+    <h2><span class="grp-only">9. </span>Billing Summary</h2>
+    <div class="subhead" id="summarySubhead">Advanced Breakdown</div>
+    <table class="summary-tbl">
+      <thead>
+        <tr>
+          <th class="group-only-field">Bundle Types Rooftop Count</th>
+          <th>Product Inclusions</th>
+          <th class="onetime-col">One Time Fee</th>
+          <th>Monthly Recurring Fee</th>
+          <th>Annual Recurring Fee</th>
+          <th class="discount-col">Discount Applied</th>
+        </tr>
+      </thead>
+      <tbody id="summaryRows"></tbody>
+    </table>
+    <div class="breakdown-note reseller-only" style="margin-bottom:2px;">* One-time Setup Fee will be charged as per actuals (vendor-specific, per rooftop).</div>
+    <div class="breakdown-note reseller-only" style="margin-bottom:2px;">* One-time Integration Fee will be charged as per actuals (vendor-specific, per rooftop).</div>
+    <div class="breakdown-note reseller-only" style="margin-bottom:10px;">Any taxes will be levied extra, as per applicable laws.</div>
+    <div class="summary-meta-row"><span>Billing Frequency</span><span class="val" id="summaryBillingFreq">—</span></div>
+    <div class="summary-meta-row"><span>Contract Duration</span><span class="val" id="summaryContractDuration">—</span></div>
+    <div class="net-box net-box-toggle">
+      <div class="net-row"><span>Net One Time Fee Payable</span><span id="netOneTime">USD 0.00</span></div>
+      <div class="net-row"><span>Net Monthly Recurring Fee Payable</span><span id="netMonthly">USD 0.00</span></div>
+      <div class="net-row"><span>Net Annual Recurring Payable</span><span id="netAnnual">USD 0.00</span></div>
+      <div class="foot">
+        <ul>
+          <li>Recurring Fee: (Total per Month x Billing Frequency)</li>
+          <li>Any taxes will be levied extra, as per applicable laws</li>
+        </ul>
+      </div>
+    </div>
+    <div class="plain-totals grp-only">
+      <div class="summary-meta-row bold"><span>Total One Time Fee</span><span class="val" id="grpNetOneTime">USD 0.00</span></div>
+      <div class="summary-meta-row bold"><span>Total Monthly Recurring Fee</span><span class="val" id="grpNetMonthly">USD 0.00</span></div>
+      <div class="summary-meta-row bold"><span>Total Annual Recurring Fee</span><span class="val" id="grpNetAnnual">USD 0.00</span></div>
+      <div class="foot" style="margin-top:8px;">
+        <ul>
+          <li>Recurring Fee: (Total per Month x Billing Frequency)</li>
+          <li>Any taxes will be levied extra, as per applicable laws</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom action bar -->
+<div class="action-bar">
+  <button class="btn btn-bordered" onclick="alert('Prototype only')">Cancel</button>
+  <div class="right">
+    <button class="btn btn-light" onclick="alert('Prototype only')">Preview PDF</button>
+    <button class="btn btn-light" id="draftBtn" onclick="alert('Prototype only')">Save as Draft</button>
+    <button class="btn btn-primary" onclick="alert('Prototype only')">Create Contract</button>
+  </div>
+</div>
+
+<!-- Customer Type change modal -->
+<div class="modal-overlay" id="ctModal">
+  <div class="modal-box">
+    <div class="icon-circle">!</div>
+    <h3>Change Customer Type</h3>
+    <p id="ctModalText">Are you sure you want to change customer type from <strong id="ctFrom">Individual Dealer</strong> to <strong id="ctTo">Group Dealer</strong>? Your prefilled data and flow-specific selections may be lost or reset.</p>
+    <div class="warn" id="ctModalWarn" style="display:none;">Individual Dealer can only have 1 rooftop — this contract currently has more than one rooftop configured.</div>
+    <div class="actions">
+      <button class="btn btn-bordered" id="ctCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="ctConfirmBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit T&C modal -->
+<div class="modal-overlay" id="tncModal">
+  <div class="modal-box left wide">
+    <h3>Edit Terms &amp; Conditions</h3>
+    <p>Free-text override of the standard contract clauses. Changes here apply to this contract only.</p>
+    <textarea>Standard Master Services Agreement terms apply. Termination requires written notice per the Termination Days specified above. This Agreement is governed by the laws of the State of Florida...</textarea>
+    <div class="actions">
+      <button class="btn btn-bordered" onclick="document.getElementById('tncModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" onclick="document.getElementById('tncModal').classList.remove('open')">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- section collapse/expand ----
+document.querySelectorAll('[data-toggle]').forEach(header => {
+  header.addEventListener('click', () => {
+    const card = header.closest('[data-section]');
+    if (card.classList.contains('section-disabled')) return;
+    card.classList.toggle('collapsed');
+  });
+});
+
+// ---- customer type switching ----
+const ctLabels = { individual: 'Individual Dealer', group: 'Group Dealer', reseller: 'Reseller' };
+const ctSelect = document.getElementById('ctSelect');
+const ctPreview = document.getElementById('ctPreview');
+const ctModal = document.getElementById('ctModal');
+let pendingCt = null;
+let currentCt = 'individual';
+
+function applyCt(ct) {
+  document.body.classList.remove('ct-individual', 'ct-group', 'ct-reseller');
+  document.body.classList.add('ct-' + ct);
+  ctSelect.value = ct;
+  ctPreview.value = ct;
+  currentCt = ct;
+  document.getElementById('pageTitle').textContent = 'Create New Contract';
+  document.getElementById('summarySubhead').textContent = ct === 'reseller'
+    ? 'Advance Breakdown (per live Rooftop)'
+    : 'Advanced Breakdown';
+  const mixedOpt = document.getElementById('mixedOption');
+  mixedOpt.disabled = (ct === 'individual');
+  if (ct === 'individual' && document.getElementById('subTypeSelect').value === 'Mixed') {
+    document.getElementById('subTypeSelect').value = 'New Dealer';
+  }
+  if (typeof refreshAllPricing === 'function') refreshAllPricing();
+}
+
+// Studio/Vini pricing-table sections stay visible but disable (not hide) when their
+// product isn't selected in Basic Details — matches shouldShowSection/dependsOnProducts.
+function onSelectProductsChange() {
+  const studioOn = document.getElementById('selectProductStudio').checked;
+  const viniOn = document.getElementById('selectProductVini').checked;
+  const studioCard = document.getElementById('studioSectionCard');
+  const viniCard = document.getElementById('viniSectionCard');
+  studioCard.classList.toggle('section-disabled', !studioOn);
+  viniCard.classList.toggle('section-disabled', !viniOn);
+  if (!studioOn) studioCard.classList.add('collapsed'); else studioCard.classList.remove('collapsed');
+  if (!viniOn) viniCard.classList.add('collapsed'); else viniCard.classList.remove('collapsed');
+  if (typeof refreshAllPricing === 'function') refreshAllPricing();
+}
+
+function requestCtChange(newCt) {
+  if (newCt === currentCt) return;
+  pendingCt = newCt;
+  document.getElementById('ctFrom').textContent = ctLabels[currentCt];
+  document.getElementById('ctTo').textContent = ctLabels[newCt];
+  document.getElementById('ctModalWarn').style.display = (newCt === 'individual') ? 'block' : 'none';
+  ctModal.classList.add('open');
+}
+
+ctSelect.addEventListener('change', e => requestCtChange(e.target.value));
+ctPreview.addEventListener('change', e => requestCtChange(e.target.value));
+
+document.getElementById('ctConfirmBtn').addEventListener('click', () => {
+  if (pendingCt) applyCt(pendingCt);
+  pendingCt = null;
+  ctModal.classList.remove('open');
+});
+document.getElementById('ctCancelBtn').addEventListener('click', () => {
+  ctSelect.value = currentCt;
+  ctPreview.value = currentCt;
+  pendingCt = null;
+  ctModal.classList.remove('open');
+});
+
+// ---- reseller slab panel toggle ----
+document.querySelectorAll('[data-slab-toggle]').forEach(el => {
+  el.addEventListener('click', () => {
+    const panel = document.getElementById('slabPanel' + (el.dataset.slabToggle === 'studio' ? 'Studio' : 'Vini'));
+    panel.classList.toggle('open');
+    el.textContent = panel.classList.contains('open') ? '🗂️ Hide slab pricing' : '🗂️ View slab pricing';
+  });
+});
+
+// ---- signatory POC email list ----
+let pocCount = 0;
+function addPocRow(value) {
+  pocCount++;
+  const row = document.createElement('div');
+  row.className = 'email-list-row';
+  row.innerHTML = `<input type="email" placeholder="poc@dealer.com" value="${value || ''}">
+    <button type="button" class="icon-btn" onclick="this.closest('.email-list-row').remove()">✕</button>`;
+  document.getElementById('pocList').appendChild(row);
+}
+document.getElementById('addPocBtn').addEventListener('click', () => addPocRow(''));
+addPocRow('accounting@acmemotors.com');
+
+// ==================== PRICING ENGINE ====================
+// Dummy but internally-consistent tiered catalog standing in for the real API-driven
+// pricing (pricing.studioAi / pricing.conversationalAi). Mechanics mirror the real code
+// exactly: getSlabKeyForVinCount-style range-tier lookup, buildStudioBreakdownRows /
+// ViniBreakdownTable / CombinedBundleBreakdown row shape, and the click-to-edit
+// Discount Amount / Discount % / Final Price triangle around MRP (studio-pricing-
+// breakdowns.tsx, converse-pricing/vini-breakdown-table.tsx, sections-card/combined-
+// bundle-breakdown.tsx). Only the underlying $ numbers are invented.
+
+function money(amount, currency) { return `${currency} ${Number(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+function pctFmt(amount) { return `${Number(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`; }
+const CURRENCY = 'USD';
+
+function tierPrice(tiers, count) {
+  if (!count || count <= 0) return null;
+  const tier = tiers.find(t => count <= t.max);
+  return tier ? tier.price : tiers[tiers.length - 1].price;
+}
+function calcDiscountPercentage(base, final) {
+  if (!base) return 0;
+  const clampedFinal = Math.max(final, 0);
+  return Math.round(((base - clampedFinal) / base) * 10000) / 100;
+}
+
+const STUDIO_PLAN_TIERS = {
+  lite: [{ max: 50, price: 4.00 }, { max: 100, price: 3.50 }, { max: 200, price: 3.00 }, { max: Infinity, price: 2.50 }],
+  pro:  [{ max: 50, price: 6.50 }, { max: 100, price: 5.75 }, { max: 200, price: 5.00 }, { max: Infinity, price: 4.25 }],
+};
+const STUDIO_ADDON_TIERS = {
+  smartMatch:    [{ max: 50, price: 1.20 }, { max: 100, price: 1.00 }, { max: 200, price: 0.85 }, { max: Infinity, price: 0.70 }],
+  smartCampaign: [{ max: 50, price: 1.50 }, { max: 100, price: 1.25 }, { max: 200, price: 1.05 }, { max: Infinity, price: 0.90 }],
+};
+const STUDIO_ADDON_LABEL = { smartMatch: 'Smart Match', smartCampaign: 'Smart Campaign' };
+const VINI_AGENT_META = {
+  inboundSales:    { groupLabel: 'Sales Agent',   typeLabel: 'Inbound',  tiers: [{ max: 50, price: 6.50 }, { max: 100, price: 5.75 }, { max: 300, price: 5.00 }, { max: Infinity, price: 4.25 }] },
+  outboundSales:   { groupLabel: 'Sales Agent',   typeLabel: 'Outbound', tiers: [{ max: 300, price: 1.15 }, { max: 750, price: 1.00 }, { max: 1000, price: 0.90 }, { max: Infinity, price: 0.80 }] },
+  inboundService:  { groupLabel: 'Service Agent', typeLabel: 'Inbound',  tiers: [{ max: 50, price: 5.00 }, { max: 100, price: 4.40 }, { max: 300, price: 3.80 }, { max: Infinity, price: 3.25 }] },
+  outboundService: { groupLabel: 'Service Agent', typeLabel: 'Outbound', tiers: [{ max: 300, price: 1.05 }, { max: 750, price: 0.92 }, { max: 1000, price: 0.82 }, { max: Infinity, price: 0.72 }] },
+};
+
+// Per-row Customer-Requested-Price overrides — keyed by "<scope>:<tableId>:<rowId>", same
+// idea as rooftop.pricingOverrides — so a slab-tier change (VIN count crossing a band)
+// naturally drops a stale override, matching the real key-on-slabKey behaviour.
+const priceOverrides = {};
+function overrideKey(scope, tableId, rowId) { return `${scope}:${tableId}:${rowId}`; }
+
+function computeStudioRows(scope, state) {
+  const rows = [];
+  const plan = state.plan;
+  const vins = Number(state.vins) || 0;
+  if (plan && vins > 0) {
+    const base = tierPrice(STUDIO_PLAN_TIERS[plan], vins) || 0;
+    const mrp = base * vins;
+    const key = overrideKey(scope, plan, 'vin-' + vins);
+    rows.push({ product: 'Studio', type: `${plan.toUpperCase()} Plan`, frequency: 'Monthly', mrp, finalPrice: priceOverrides[key] !== undefined ? priceOverrides[key] : mrp, tableId: plan, rowId: 'vin-' + vins });
+  }
+  // NOTE: the generic tiered "Setup Fee" row that used to live here was retired —
+  // Studio's one-time cost is now the CJI provider's integration fee, tracked in the
+  // Integration Cost Summary section (computeIntegrationBreakdown), not in this table.
+  (state.addons || []).forEach(addonId => {
+    const base = tierPrice(STUDIO_ADDON_TIERS[addonId], vins) || 0;
+    if (!vins || !base) return;
+    const mrp = base * vins;
+    const key = overrideKey(scope, 'addOn', addonId + '-' + vins);
+    rows.push({ product: 'Add-on', type: STUDIO_ADDON_LABEL[addonId], frequency: 'Monthly', mrp, finalPrice: priceOverrides[key] !== undefined ? priceOverrides[key] : mrp, tableId: 'addOn', rowId: addonId + '-' + vins });
+  });
+  return rows;
+}
+
+function computeViniRows(scope, agents) {
+  const rows = [];
+  Object.entries(agents || {}).forEach(([agentId, agentState]) => {
+    if (!agentState?.enabled || !agentState?.units) return;
+    const units = Number(agentState.units) || 0;
+    if (units <= 0) return;
+    const meta = VINI_AGENT_META[agentId];
+    const base = tierPrice(meta.tiers, units) || 0;
+    const mrp = base * units;
+    const key = overrideKey(scope, agentId, 'u-' + units);
+    rows.push({ product: meta.groupLabel, type: meta.typeLabel, frequency: 'Monthly', mrp, finalPrice: priceOverrides[key] !== undefined ? priceOverrides[key] : mrp, tableId: agentId, rowId: 'u-' + units });
+  });
+  return rows;
+}
+
+function breakdownTotals(rows) {
+  const mrp = rows.reduce((s, r) => s + r.mrp, 0);
+  const finalPrice = rows.reduce((s, r) => s + r.finalPrice, 0);
+  return { mrp, finalPrice, discountAmount: mrp - finalPrice, discountPercent: calcDiscountPercentage(mrp, finalPrice) };
+}
+
+// Renders a Product/Type/Frequency/MRP/Discount/Final Price table with click-to-edit cells.
+function renderBreakdownTable(rows, opts) {
+  const { scope, emptyText, suffix } = opts;
+  const totals = breakdownTotals(rows);
+  let bodyHtml = '';
+  if (!rows.length) {
+    bodyHtml = `<tr><td colspan="6" class="tbl-empty-row">${emptyText}</td></tr>`;
+  } else {
+    rows.forEach((row, idx) => {
+      const showGroup = idx === 0 || rows[idx - 1].product !== row.product;
+      const span = rows.filter(r => r.product === row.product).length;
+      const discountAmount = row.mrp - row.finalPrice;
+      const discountPercent = calcDiscountPercentage(row.mrp, row.finalPrice);
+      const rowKey = overrideKey(scope, row.tableId, row.rowId);
+      bodyHtml += `<tr>
+        ${showGroup ? `<td rowspan="${span}" class="center" style="font-weight:600;">${row.product}</td>` : ''}
+        <td>${row.type}</td>
+        <td>${row.frequency}</td>
+        <td class="right">${money(row.mrp, CURRENCY)}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button type="button" class="edit-btn" data-edit-key="${rowKey}" data-edit-field="amount" data-edit-mrp="${row.mrp}">${money(discountAmount, CURRENCY)}</button>
+            <button type="button" class="edit-btn" data-edit-key="${rowKey}" data-edit-field="percent" data-edit-mrp="${row.mrp}" style="color:var(--success);">(${pctFmt(discountPercent)})</button>
+          </div>
+        </td>
+        <td><button type="button" class="edit-btn" data-edit-key="${rowKey}" data-edit-field="final" data-edit-mrp="${row.mrp}" style="min-width:110px;">${money(row.finalPrice, CURRENCY)}</button></td>
+      </tr>`;
+    });
+    bodyHtml += `<tr class="total-row">
+      <td>Grand Total</td><td></td><td></td>
+      <td class="right">${money(totals.mrp, CURRENCY)}</td>
+      <td class="right">${money(totals.discountAmount, CURRENCY)} <span style="color:var(--success);font-weight:600;">(${pctFmt(totals.discountPercent)})</span></td>
+      <td class="right" style="font-weight:700;">${money(totals.finalPrice, CURRENCY)}</td>
+    </tr>`;
+  }
+  const suffixHtml = suffix ? ` <span class="hint" style="font-style:italic;">${suffix}</span>` : '';
+  return {
+    totals,
+    html: `<div class="breakdown-header"><span>Advanced Breakdown${suffixHtml}</span><span class="req-price-badge">Customer Requested Price</span></div>
+      <table class="tbl"><thead><tr><th>Product</th><th>Type</th><th>Frequency</th><th>MRP</th><th>Discount</th><th>Final Price</th></tr></thead>
+      <tbody>${bodyHtml}</tbody></table>`,
+  };
+}
+
+// Click-to-edit wiring, delegated globally. Discount Amount / Discount % / Final Price are
+// one reactive triangle around MRP — editing any one recomputes the override finalPrice.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.edit-btn');
+  if (!btn) return;
+  const mrp = Number(btn.dataset.editMrp);
+  const field = btn.dataset.editField;
+  const key = btn.dataset.editKey;
+  const current = btn.textContent.replace(/[^0-9.\-]/g, '');
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.step = '0.01';
+  input.value = current;
+  input.style.cssText = 'width:90px;padding:4px 6px;border:1px solid var(--primary);border-radius:6px;font-size:12.5px;';
+  btn.replaceWith(input);
+  input.focus();
+  input.select();
+  const commit = () => {
+    const val = parseFloat(input.value);
+    if (!Number.isNaN(val)) {
+      let finalPrice;
+      if (field === 'amount') finalPrice = mrp - Math.min(val, mrp);
+      else if (field === 'percent') finalPrice = mrp * (1 - Math.min(val, 100) / 100);
+      else finalPrice = Math.max(val, 0);
+      priceOverrides[key] = finalPrice;
+      refreshAllPricing();
+    } else {
+      refreshAllPricing();
+    }
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') input.blur();
+    if (ev.key === 'Escape') { input.value = current; input.blur(); }
+  });
+});
+
+// ==================== INTEGRATION COSTING (CJI / CRM / Service scheduler / DMS) ====================
+// Same representative catalog and pricing model as the standalone Group Dealer /
+// Individual Dealer integration-costing prototypes in this folder (see their
+// "Modelling assumptions" cards for why each model was chosen — MG-banded for evox,
+// flat or per-rooftop elsewhere, "unpriced" where the sheet gives no resolvable rate).
+// Individual Dealer: the CJI/CRM/Service/DMS fields on the Studio/Vini sections above.
+// Group Dealer: integration is a per-rooftop fact, so it lives on "Add Rooftop
+// Details" rows, not the bundle — a bundle only fixes product + price, not which
+// third-party system each of its rooftops happens to run.
+const INTEGRATION_CATALOG = {
+  cji: { label: 'CJI provider (Studio)', providers: {
+    evox: { name: 'evox', oneTime: 695, model: 'banded', mgFee: 1000, mgThreshold: 20, rate: 40 },
+  } },
+  crm: { label: 'Sales CRM provider', providers: {
+    drivecentric: { name: 'DriveCentric', oneTime: 594, model: 'per-rooftop', rate: 99 },
+    elead: { name: 'Elead', oneTime: 2500, model: 'flat', mgFee: 499 },
+    reynoldssales: { name: 'Reynolds Sales', oneTime: 720, model: 'per-rooftop', rate: 150 },
+  } },
+  service: { label: 'Service scheduler provider', providers: {
+    mykaarma: { name: 'MyKaarma', oneTime: 750, model: 'per-rooftop', rate: 75 },
+    xtime: { name: 'xTime', oneTime: 3500, model: 'per-rooftop', rate: 75 },
+  } },
+  dms: { label: 'DMS provider', providers: {
+    frazer: { name: 'Frazer', oneTime: 530, model: 'per-rooftop', rate: 40 },
+    pbsdms: { name: 'PBS', oneTime: 6000, model: 'unpriced' },
+  } },
+};
+const INTEGRATION_CAT_ORDER = ['cji', 'crm', 'service', 'dms'];
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// discountPct is the value actually stored, per row key ("<cat>:<providerId>" or
+// "<cat>:custom:<id>"); offered price is always derived from it against that row's
+// current monthly cost, so the discount survives if the underlying cost later changes
+// (e.g. more rooftops added to a provider, crossing evox's MG threshold).
+const integrationDiscounts = {};
+function getIntegrationDiscountPct(key) { return integrationDiscounts[key] || 0; }
+
+function priceProvider(provider, count) {
+  let monthly, monthlyText;
+  if (provider.model === 'unpriced') { monthly = 0; monthlyText = 'Recurring not priced — contact Product & Tech'; }
+  else if (provider.model === 'flat') { monthly = provider.mgFee; monthlyText = money(provider.mgFee, CURRENCY) + '/mo flat' + (count > 1 ? ', all rooftops on this provider' : ''); }
+  else if (provider.model === 'per-rooftop') { monthly = provider.rate * count; monthlyText = money(provider.rate, CURRENCY) + ' × ' + count + ' rooftop' + (count === 1 ? '' : 's'); }
+  else if (provider.model === 'banded') {
+    if (count <= provider.mgThreshold) { monthly = provider.mgFee; monthlyText = 'MG ' + money(provider.mgFee, CURRENCY) + '/mo — covers up to ' + provider.mgThreshold + ' rooftops (' + count + ' used)'; }
+    else { const extra = count - provider.mgThreshold; monthly = provider.mgFee + extra * provider.rate; monthlyText = 'MG ' + money(provider.mgFee, CURRENCY) + ' (first ' + provider.mgThreshold + ') + ' + money(provider.rate, CURRENCY) + ' × ' + extra + ' rooftop' + (extra === 1 ? '' : 's') + ' over'; }
+  }
+  return { monthly, monthlyText, unpriced: provider.model === 'unpriced' };
+}
+
+// ---- Individual Dealer: single-rooftop category read ----
+function onIntegrationFieldChange(catKey) {
+  const sel = document.getElementById('ind' + capitalize(catKey) + 'Provider').value;
+  const wrap = document.getElementById('ind' + capitalize(catKey) + 'CustomWrap');
+  if (wrap) wrap.style.display = sel === 'custom' ? '' : 'none';
+  refreshAllPricing();
+}
+function renderIndividualIntegrationVisibility() {
+  const salesOn = document.getElementById('indViniEnableInboundSales').checked || document.getElementById('indViniEnableOutboundSales').checked;
+  const serviceOn = document.getElementById('indViniEnableInboundService').checked || document.getElementById('indViniEnableOutboundService').checked;
+  document.getElementById('indCrmField').style.display = salesOn ? '' : 'none';
+  document.getElementById('indServiceField').style.display = serviceOn ? '' : 'none';
+  document.getElementById('indDmsField').style.display = serviceOn ? '' : 'none';
+  if (!salesOn) document.getElementById('indCrmCustomWrap').style.display = 'none';
+  if (!serviceOn) { document.getElementById('indServiceCustomWrap').style.display = 'none'; document.getElementById('indDmsCustomWrap').style.display = 'none'; }
+}
+function computeIndividualIntegrationCategory(catKey) {
+  const cat = INTEGRATION_CATALOG[catKey];
+  let applicable;
+  if (catKey === 'cji') applicable = document.getElementById('selectProductStudio').checked;
+  else if (catKey === 'crm') applicable = document.getElementById('selectProductVini').checked && (document.getElementById('indViniEnableInboundSales').checked || document.getElementById('indViniEnableOutboundSales').checked);
+  else applicable = document.getElementById('selectProductVini').checked && (document.getElementById('indViniEnableInboundService').checked || document.getElementById('indViniEnableOutboundService').checked);
+  if (!applicable) return { label: cat.label, applicable: false, rows: [], noneCount: 0, applicableCount: 0, oneTimeTotal: 0, monthlyTotal: 0, offeredMonthlyTotal: 0 };
+
+  const sel = document.getElementById('ind' + capitalize(catKey) + 'Provider').value;
+  let row = null, noneCount = 0;
+  if (sel === 'none') {
+    noneCount = 1;
+  } else if (sel === 'custom') {
+    const oneTime = Number(document.getElementById('ind' + capitalize(catKey) + 'CustomOneTime').value) || 0;
+    const monthly = Number(document.getElementById('ind' + capitalize(catKey) + 'CustomMonthly').value) || 0;
+    const key = catKey + ':custom:ind';
+    const pct = getIntegrationDiscountPct(key);
+    row = { label: 'Custom integration cost', count: 1, oneTime, monthly, monthlyText: money(monthly, CURRENCY) + '/mo flat (custom)', unpriced: false, key, discountPct: pct, offered: monthly * (1 - pct / 100) };
+  } else {
+    const provider = cat.providers[sel];
+    if (provider) {
+      const priced = priceProvider(provider, 1);
+      const key = catKey + ':' + sel;
+      const pct = priced.unpriced ? 0 : getIntegrationDiscountPct(key);
+      row = { label: provider.name, count: 1, oneTime: provider.oneTime, monthly: priced.monthly, monthlyText: priced.monthlyText, unpriced: priced.unpriced, key, discountPct: pct, offered: priced.unpriced ? 0 : priced.monthly * (1 - pct / 100) };
+    }
+  }
+  const rows = row ? [row] : [];
+  return {
+    label: cat.label, applicable: true, rows, noneCount, applicableCount: 1,
+    oneTimeTotal: rows.reduce((s, r) => s + r.oneTime, 0),
+    monthlyTotal: rows.reduce((s, r) => s + (r.unpriced ? 0 : r.monthly), 0),
+    offeredMonthlyTotal: rows.reduce((s, r) => s + (r.unpriced ? 0 : r.offered), 0),
+  };
+}
+
+// ---- Group Dealer: per-rooftop category read, grouped by provider ----
+function rooftopIntegrationCellHtml(catKey) {
+  const cat = INTEGRATION_CATALOG[catKey];
+  const optionsHtml = '<option value="none">Not integrated</option>' +
+    Object.entries(cat.providers).map(([id, p]) => `<option value="${id}"${id === Object.keys(cat.providers)[0] ? ' selected' : ''}>${p.name}${p.model === 'unpriced' ? ' (pending)' : ''}</option>`).join('') +
+    '<option value="custom">Custom cost…</option>';
+  return `<td>
+      <span class="hint" data-rooftop-na="${catKey}">Not applicable</span>
+      <select data-rooftop-${catKey} style="display:none;">${optionsHtml}</select>
+      <div data-rooftop-${catKey}-customwrap style="display:none; gap:4px; margin-top:4px;">
+        <input type="number" min="0" placeholder="One-time" data-rooftop-${catKey}-custom-onetime style="width:70px;" oninput="refreshAllPricing()">
+        <input type="number" min="0" placeholder="Monthly" data-rooftop-${catKey}-custom-monthly style="width:70px;" oninput="refreshAllPricing()">
+      </div>
+    </td>`;
+}
+function onRooftopIntegrationChange(selectEl, catKey) {
+  const tr = selectEl.closest('tr');
+  const wrap = tr.querySelector(`[data-rooftop-${catKey}-customwrap]`);
+  if (wrap) wrap.style.display = selectEl.value === 'custom' ? 'flex' : 'none';
+  refreshAllPricing();
+}
+function rooftopAppliesTo(catKey, bundleCard) {
+  if (!bundleCard) return false;
+  // CJI: Studio product only.
+  if (catKey === 'cji') return bundleCard.querySelector('[data-bundle-studio]').checked;
+  // CRM / Service / DMS all require Conversational AI itself to be on for this bundle —
+  // the per-agent checkboxes below stay checked in the DOM even while the whole Vini
+  // block is hidden (unchecking Conversational AI only toggles display, it doesn't
+  // reset the agent checkboxes), so that check must come first or a bundle with
+  // Conversational AI off would still read as having CRM/Service/DMS applicable.
+  if (!bundleCard.querySelector('[data-bundle-vini]').checked) return false;
+  if (catKey === 'crm') return bundleCard.querySelector('[data-bundle-vini-enable="inboundSales"]').checked || bundleCard.querySelector('[data-bundle-vini-enable="outboundSales"]').checked;
+  // service / dms: Service Inbound or Outbound.
+  return bundleCard.querySelector('[data-bundle-vini-enable="inboundService"]').checked || bundleCard.querySelector('[data-bundle-vini-enable="outboundService"]').checked;
+}
+function refreshRooftopIntegrationGating() {
+  document.querySelectorAll('#rooftopRows tr[data-rooftop-row]').forEach(tr => {
+    const bundleId = tr.dataset.currentBundle;
+    const bundleCard = bundleId ? document.querySelector(`#bundleList .subcard[data-bundle-id="${bundleId}"]`) : null;
+    INTEGRATION_CAT_ORDER.forEach(catKey => {
+      const applies = rooftopAppliesTo(catKey, bundleCard);
+      const sel = tr.querySelector(`[data-rooftop-${catKey}]`);
+      const na = tr.querySelector(`[data-rooftop-na="${catKey}"]`);
+      const wrap = tr.querySelector(`[data-rooftop-${catKey}-customwrap]`);
+      if (sel) sel.style.display = applies ? '' : 'none';
+      if (na) na.style.display = applies ? 'none' : '';
+      if (wrap) wrap.style.display = (applies && sel && sel.value === 'custom') ? 'flex' : 'none';
+    });
+  });
+}
+function computeGroupIntegrationCategory(catKey) {
+  const cat = INTEGRATION_CATALOG[catKey];
+  const groups = {};
+  let noneCount = 0, applicableCount = 0;
+  Array.from(document.querySelectorAll('#rooftopRows tr[data-rooftop-row]')).forEach((tr, idx) => {
+    const bundleId = tr.dataset.currentBundle;
+    const bundleCard = bundleId ? document.querySelector(`#bundleList .subcard[data-bundle-id="${bundleId}"]`) : null;
+    if (!rooftopAppliesTo(catKey, bundleCard)) return;
+    applicableCount++;
+    const selEl = tr.querySelector(`[data-rooftop-${catKey}]`);
+    const sel = selEl ? selEl.value : 'none';
+    if (sel === 'none') { noneCount++; return; }
+    if (sel === 'custom') {
+      const oneTime = Number((tr.querySelector(`[data-rooftop-${catKey}-custom-onetime]`) || {}).value) || 0;
+      const monthly = Number((tr.querySelector(`[data-rooftop-${catKey}-custom-monthly]`) || {}).value) || 0;
+      const rowName = (tr.querySelector('[data-rooftop-name]').value || `Row ${idx + 1}`);
+      groups['custom:' + idx] = { label: 'Custom — ' + rowName, count: 1, oneTime, monthly, monthlyText: money(monthly, CURRENCY) + '/mo flat (custom, one rooftop)', unpriced: false };
+      return;
+    }
+    const provider = cat.providers[sel];
+    if (!provider) return;
+    if (!groups[sel]) groups[sel] = { label: provider.name, count: 0, provider };
+    groups[sel].count++;
+  });
+  const rows = Object.keys(groups).map(k => {
+    const g = groups[k];
+    let row;
+    if (g.provider) {
+      const priced = priceProvider(g.provider, g.count);
+      row = { label: g.label, count: g.count, oneTime: g.provider.oneTime, monthly: priced.monthly, monthlyText: priced.monthlyText, unpriced: priced.unpriced };
+    } else {
+      row = g;
+    }
+    row.key = catKey + ':' + k;
+    row.discountPct = row.unpriced ? 0 : getIntegrationDiscountPct(row.key);
+    row.offered = row.unpriced ? 0 : row.monthly * (1 - row.discountPct / 100);
+    return row;
+  });
+  return {
+    label: cat.label, applicable: applicableCount > 0, rows, noneCount, applicableCount,
+    oneTimeTotal: rows.reduce((s, r) => s + r.oneTime, 0),
+    monthlyTotal: rows.reduce((s, r) => s + (r.unpriced ? 0 : r.monthly), 0),
+    offeredMonthlyTotal: rows.reduce((s, r) => s + (r.unpriced ? 0 : r.offered), 0),
+  };
+}
+function computeIntegrationCategory(catKey) {
+  return currentCt === 'group' ? computeGroupIntegrationCategory(catKey) : computeIndividualIntegrationCategory(catKey);
+}
+
+function renderIntegrationCostSummary() {
+  const mount = document.getElementById('integrationSummaryMount');
+  if (!mount) return;
+  let grandOneTime = 0, grandCost = 0, grandOffered = 0;
+  let html = '';
+  INTEGRATION_CAT_ORDER.forEach(catKey => {
+    const d = computeIntegrationCategory(catKey);
+    grandOneTime += d.oneTimeTotal;
+    grandCost += d.monthlyTotal;
+    grandOffered += d.offeredMonthlyTotal;
+    if (!d.applicable) return;
+    const rowsHtml = d.rows.length
+      ? d.rows.map(r => `<tr>
+          <td>${r.label}</td>
+          <td class="center">${r.count}</td>
+          <td class="right">${money(r.oneTime, CURRENCY)}</td>
+          <td>${r.monthlyText}</td>
+          <td class="right">${r.unpriced ? '—' : money(r.monthly, CURRENCY)}</td>
+          <td class="right">${r.unpriced ? '—' : `<input type="number" min="0" max="100" step="0.1" data-int-disc-key="${r.key}" data-int-disc-field="pct" data-int-disc-cost="${r.monthly}" value="${r.discountPct.toFixed(1)}" style="width:64px;">`}</td>
+          <td class="right">${r.unpriced ? '—' : `<input type="number" min="0" data-int-disc-key="${r.key}" data-int-disc-field="offered" data-int-disc-cost="${r.monthly}" value="${r.offered.toFixed(2)}" style="width:86px;">`}</td>
+        </tr>`).join('')
+      : `<tr><td colspan="7" class="tbl-empty-row">${currentCt === 'group' ? 'No rooftop on this contract has a' : 'This rooftop does not have a'} ${d.label.toLowerCase()} selected yet.</td></tr>`;
+    const badgeStyle = d.noneCount > 0 ? 'background:var(--error-bg); color:var(--error);' : 'background:var(--success-bg); color:var(--success);';
+    const badgeText = d.noneCount > 0 ? `${d.noneCount} of ${d.applicableCount} not mapped` : `All ${d.applicableCount} mapped`;
+    html += `<div style="margin-bottom:16px;">
+      <div class="breakdown-header" style="margin-bottom:6px;"><span>${d.label}</span><span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; ${badgeStyle}">${badgeText}</span></div>
+      <div class="data-table"><table class="tbl">
+        <thead><tr><th>Provider</th><th class="center">Rooftops</th><th class="right">One-time</th><th>Monthly</th><th class="right">Monthly subtotal</th><th class="right">Discount %</th><th class="right">Offered price</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table></div>
+    </div>`;
+  });
+  mount.innerHTML = html || `<div class="hint">Select Studio AI or a Vini agent to see integration cost.</div>`;
+  const oneTimeEl = document.getElementById('integOneTimeTotal');
+  const monthlyEl = document.getElementById('integMonthlyTotal');
+  const costEl = document.getElementById('integMonthlyCost');
+  if (oneTimeEl) oneTimeEl.textContent = money(grandOneTime, CURRENCY);
+  if (monthlyEl) monthlyEl.textContent = money(grandOffered, CURRENCY);
+  if (costEl) costEl.textContent = money(grandCost, CURRENCY);
+}
+document.addEventListener('change', (e) => {
+  const key = e.target.dataset.intDiscKey;
+  if (!key) return;
+  const cost = Number(e.target.dataset.intDiscCost) || 0;
+  const field = e.target.dataset.intDiscField;
+  if (field === 'pct') {
+    integrationDiscounts[key] = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
+  } else {
+    const offered = Math.min(cost, Math.max(0, parseFloat(e.target.value) || 0));
+    integrationDiscounts[key] = cost > 0 ? (1 - offered / cost) * 100 : 0;
+  }
+  renderIntegrationCostSummary();
+  renderBillingSummary();
+});
+
+// ---- Individual Dealer: Studio + Vini live state/read/render ----
+function readIndStudioState() {
+  return {
+    plan: document.getElementById('indStudioPlan').value,
+    vins: document.getElementById('indStudioVins').value,
+    existingInv: document.getElementById('indStudioExistingInv').value,
+    addons: [
+      ...(document.getElementById('indAddonSmartMatch').checked ? ['smartMatch'] : []),
+      ...(document.getElementById('indAddonSmartCampaign').checked ? ['smartCampaign'] : []),
+    ],
+  };
+}
+function readIndViniState() {
+  return {
+    inboundSales: { enabled: document.getElementById('indViniEnableInboundSales').checked, units: document.getElementById('indViniInboundSales').value },
+    outboundSales: { enabled: document.getElementById('indViniEnableOutboundSales').checked, units: document.getElementById('indViniOutboundSales').value },
+    inboundService: { enabled: document.getElementById('indViniEnableInboundService').checked, units: document.getElementById('indViniInboundService').value },
+    outboundService: { enabled: document.getElementById('indViniEnableOutboundService').checked, units: document.getElementById('indViniOutboundService').value },
+  };
+}
+function onIndStudioChange() {
+  const state = readIndStudioState();
+  document.getElementById('indStudioExistingInv').disabled = !state.plan;
+  refreshAllPricing();
+}
+function onIndViniChange() {
+  ['InboundSales', 'OutboundSales', 'InboundService', 'OutboundService'].forEach(suffix => {
+    const enabled = document.getElementById('indViniEnable' + suffix).checked;
+    document.getElementById('indVini' + suffix).disabled = !enabled;
+  });
+  renderIndividualIntegrationVisibility();
+  refreshAllPricing();
+}
+function renderIndividualBreakdowns() {
+  const studioRows = computeStudioRows('ind-studio', readIndStudioState());
+  const studioResult = renderBreakdownTable(studioRows, { scope: 'ind-studio', emptyText: 'Select plan type and number of VINs to see breakdown' });
+  document.getElementById('studioBreakdownMount').innerHTML = studioResult.html;
+
+  const viniRows = computeViniRows('ind-vini', readIndViniState());
+  const viniResult = renderBreakdownTable(viniRows, { scope: 'ind-vini', emptyText: 'Select at least one Vini Agent and enter units to see breakdown' });
+  document.getElementById('viniBreakdownMount').innerHTML = viniResult.html;
+
+  renderIndividualIntegrationHints();
+  return { studioRows, viniRows };
+}
+function renderIndividualIntegrationHints() {
+  INTEGRATION_CAT_ORDER.forEach(catKey => {
+    const hintEl = document.getElementById('ind' + capitalize(catKey) + 'Hint');
+    if (!hintEl) return;
+    const d = computeIndividualIntegrationCategory(catKey);
+    if (!d.applicable) { hintEl.textContent = ''; return; }
+    if (!d.rows.length) { hintEl.textContent = 'No integration cost mapped for this rooftop yet.'; return; }
+    const r = d.rows[0];
+    hintEl.textContent = r.label + ' — ' + money(r.oneTime, CURRENCY) + ' one-time' + (r.unpriced ? ', price pending' : ' + ' + r.monthlyText);
+  });
+}
+
+// ---- Reseller: live cost lookup from the agreed slab rate cards shown above ----
+const RESELLER_ROOFTOP_BANDS = [{ max: 10, key: '0-10' }, { max: 50, key: '11-50' }, { max: 100, key: '51-100' }, { max: Infinity, key: '100+' }];
+const STUDIO_VIN_TIER_BANDS = [{ max: 50, key: '0-50' }, { max: 100, key: '51-100' }, { max: 200, key: '101-200' }, { max: Infinity, key: '200+' }];
+const VINI_CARS_TIER_BANDS = [{ max: 50, key: '0-50' }, { max: 100, key: '51-100' }, { max: 300, key: '101-300' }, { max: Infinity, key: '300+' }];
+const VINI_CALLS_TIER_BANDS = [{ max: 300, key: '0-300' }, { max: 750, key: '301-750' }, { max: 1000, key: '751-1000' }, { max: Infinity, key: '1000+' }];
+function tierBandKey(bands, count) { if (!count || count <= 0) return null; const b = bands.find(x => count <= x.max); return b ? b.key : null; }
+function resellerBand(count) { return tierBandKey(RESELLER_ROOFTOP_BANDS, count); }
+
+const RESELLER_STUDIO_SLAB = {
+  lite: { '0-10': { '0-50': 129, '51-100': 119, '101-200': 109, '200+': 99 }, '11-50': { '0-50': 119, '51-100': 109, '101-200': 99, '200+': 89 }, '51-100': { '0-50': 109, '51-100': 99, '101-200': 89, '200+': 79 }, '100+': { '51-100': 89, '101-200': 79, '200+': 69 } },
+  pro:  { '0-10': { '0-50': 289, '51-100': 269, '101-200': 249, '200+': 229 }, '11-50': { '0-50': 269, '51-100': 249, '101-200': 229, '200+': 209 }, '51-100': { '0-50': 249, '51-100': 229, '101-200': 209, '200+': 189 }, '100+': { '51-100': 209, '101-200': 189, '200+': 169 } },
+};
+const RESELLER_VINI_SLAB = {
+  inboundSales:    { bands: VINI_CARS_TIER_BANDS,  table: { '0-10': { '0-50': 1.05, '51-100': 0.95, '101-300': 0.88, '300+': 0.80 }, '11-50': { '0-50': 0.95, '51-100': 0.88, '101-300': 0.80, '300+': 0.72 }, '51-100': { '0-50': 0.88, '51-100': 0.80, '101-300': 0.72, '300+': 0.65 }, '100+': { '51-100': 0.72, '101-300': 0.65, '300+': 0.58 } } },
+  outboundSales:   { bands: VINI_CALLS_TIER_BANDS, table: { '0-10': { '0-300': 1.15, '301-750': 1.05, '751-1000': 0.98, '1000+': 0.90 }, '11-50': { '0-300': 1.05, '301-750': 0.98, '751-1000': 0.90, '1000+': 0.82 }, '51-100': { '0-300': 0.98, '301-750': 0.90, '751-1000': 0.82, '1000+': 0.75 }, '100+': { '301-750': 0.82, '751-1000': 0.75, '1000+': 0.68 } } },
+  inboundService:  { bands: VINI_CALLS_TIER_BANDS, table: { '0-10': { '0-300': 0.95, '301-750': 0.85, '751-1000': 0.78, '1000+': 0.70 }, '11-50': { '0-300': 0.85, '301-750': 0.78, '751-1000': 0.70, '1000+': 0.62 }, '51-100': { '0-300': 0.78, '301-750': 0.70, '751-1000': 0.62, '1000+': 0.55 }, '100+': { '301-750': 0.62, '751-1000': 0.55, '1000+': 0.48 } } },
+  outboundService: { bands: VINI_CALLS_TIER_BANDS, table: { '0-10': { '0-300': 1.00, '301-750': 0.90, '751-1000': 0.82, '1000+': 0.74 }, '11-50': { '0-300': 0.90, '301-750': 0.82, '751-1000': 0.74, '1000+': 0.66 }, '51-100': { '0-300': 0.82, '301-750': 0.74, '751-1000': 0.66, '1000+': 0.58 }, '100+': { '301-750': 0.66, '751-1000': 0.58, '1000+': 0.50 } } },
+};
+function computeResellerStudioCost(planKey, rooftops, usage) {
+  const band = resellerBand(rooftops); const tier = tierBandKey(STUDIO_VIN_TIER_BANDS, usage);
+  if (!band || !tier) return null;
+  const v = RESELLER_STUDIO_SLAB[planKey]?.[band]?.[tier];
+  return typeof v === 'number' ? v : null;
+}
+function computeResellerViniCost(agentKey, rooftops, usage) {
+  const band = resellerBand(rooftops); const meta = RESELLER_VINI_SLAB[agentKey]; const tier = meta ? tierBandKey(meta.bands, usage) : null;
+  if (!band || !tier) return null;
+  const v = meta.table[band]?.[tier];
+  return typeof v === 'number' ? v : null;
+}
+function deriveOfferedFromDisc(cost, discStr) {
+  const disc = discStr !== undefined && discStr !== '' && !Number.isNaN(parseFloat(discStr)) ? parseFloat(discStr) : 0;
+  return cost * (1 - Math.min(100, disc) / 100);
+}
+function deriveDiscFromOffered(cost, offered) {
+  if (!cost || cost <= 0) return 0;
+  return Math.min(100, ((cost - offered) / cost) * 100);
+}
+function renderResellerTables() {
+  document.querySelectorAll('table[data-reseller-table]').forEach(table => {
+    const type = table.dataset.resellerTable;
+    table.querySelectorAll('tbody tr[data-row-key]').forEach(tr => {
+      const key = tr.dataset.rowKey;
+      const enabled = tr.querySelector('[data-f="enabled"]').checked;
+      const rooftops = Number(tr.querySelector('[data-f="rooftops"]').value) || 0;
+      const usage = Number(tr.querySelector('[data-f="usage"]').value) || 0;
+      const costCell = tr.querySelector('[data-f="cost"]');
+      const offeredInput = tr.querySelector('[data-f="offered"]');
+      const discInput = tr.querySelector('[data-f="disc"]');
+      [tr.querySelector('[data-f="rooftops"]'), tr.querySelector('[data-f="usage"]'), offeredInput, discInput].forEach(el => { el.disabled = !enabled; });
+      if (!enabled) { costCell.textContent = '$—'; return; }
+      const cost = type === 'studio' ? computeResellerStudioCost(key, rooftops, usage) : computeResellerViniCost(key, rooftops, usage);
+      costCell.textContent = cost !== null ? '$' + cost.toFixed(2) : '$—';
+      if (cost === null) { offeredInput.value = ''; discInput.value = ''; return; }
+      if (tr.dataset.userEditedDisc === '1') {
+        const discVal = parseFloat(discInput.value);
+        offeredInput.value = deriveOfferedFromDisc(cost, Number.isNaN(discVal) ? '0' : String(discVal)).toFixed(2);
+      } else if (tr.dataset.userEditedOffered === '1') {
+        const offeredVal = parseFloat(offeredInput.value);
+        if (!Number.isNaN(offeredVal)) discInput.value = deriveDiscFromOffered(cost, offeredVal).toFixed(2);
+      } else {
+        offeredInput.value = cost.toFixed(2);
+        discInput.value = '0.00';
+      }
+    });
+  });
+}
+document.querySelectorAll('table[data-reseller-table] tbody tr[data-row-key]').forEach(tr => {
+  tr.querySelector('[data-f="enabled"]').addEventListener('change', () => { tr.dataset.userEditedOffered = ''; tr.dataset.userEditedDisc = ''; refreshAllPricing(); });
+  tr.querySelector('[data-f="rooftops"]').addEventListener('input', refreshAllPricing);
+  tr.querySelector('[data-f="usage"]').addEventListener('input', refreshAllPricing);
+  tr.querySelector('[data-f="offered"]').addEventListener('input', () => { tr.dataset.userEditedOffered = '1'; tr.dataset.userEditedDisc = ''; refreshAllPricing(); });
+  tr.querySelector('[data-f="disc"]').addEventListener('input', () => { tr.dataset.userEditedDisc = '1'; tr.dataset.userEditedOffered = ''; refreshAllPricing(); });
+});
+
+// ---- Group Dealer: bundles (live pricing per bundle) ----
+let bundleCount = 0;
+function readBundleStudioState(wrap) {
+  return {
+    plan: wrap.querySelector('[data-bundle-plan]').value,
+    vins: wrap.querySelector('[data-bundle-vins]').value,
+    existingInv: wrap.querySelector('[data-bundle-existing-inv]').value,
+    addons: Array.from(wrap.querySelectorAll('[data-bundle-addon]')).filter(cb => cb.checked).map(cb => cb.dataset.bundleAddon),
+  };
+}
+function readBundleViniState(wrap) {
+  const state = {};
+  ['inboundSales', 'outboundSales', 'inboundService', 'outboundService'].forEach(key => {
+    state[key] = { enabled: wrap.querySelector(`[data-bundle-vini-enable="${key}"]`).checked, units: wrap.querySelector(`[data-bundle-vini-units="${key}"]`).value };
+  });
+  return state;
+}
+function computeBundleRows(wrap) {
+  const scope = 'bundle-' + wrap.dataset.bundleId;
+  const showStudio = wrap.querySelector('[data-bundle-studio]').checked;
+  const showVini = wrap.querySelector('[data-bundle-vini]').checked;
+  const studioRows = showStudio ? computeStudioRows(scope, readBundleStudioState(wrap)) : [];
+  const viniRows = showVini ? computeViniRows(scope, readBundleViniState(wrap)).map(r => ({ ...r, product: 'VINI ' + r.product })) : [];
+  return { studioRows, viniRows };
+}
+function renderBundleBreakdown(wrap) {
+  const mount = wrap.querySelector('[data-bundle-breakdown-mount]');
+  const { studioRows, viniRows } = computeBundleRows(wrap);
+  const rows = [...studioRows, ...viniRows];
+  if (!rows.length) { mount.innerHTML = ''; return; }
+  const scope = 'bundle-' + wrap.dataset.bundleId;
+  const result = renderBreakdownTable(rows, { scope, emptyText: '', suffix: '(per rooftop pricing)' });
+  const monthlyFee = rows.filter(r => r.frequency === 'Monthly').reduce((s, r) => s + r.finalPrice, 0);
+  const oneTimeFee = rows.filter(r => r.frequency === 'One-Time').reduce((s, r) => s + r.finalPrice, 0);
+  mount.innerHTML = result.html + `
+    <div class="bundle-fee-lines">
+      <div class="summary-meta-row"><span>Monthly Fee (per rooftop)</span><span class="val">${money(monthlyFee, CURRENCY)}</span></div>
+      <div class="summary-meta-row"><span>Annual Fee (per rooftop)</span><span class="val">${money(monthlyFee * 12, CURRENCY)}</span></div>
+      <div class="summary-meta-row"><span>One Time Fee (per rooftop)</span><span class="val">${money(oneTimeFee, CURRENCY)}</span></div>
+    </div>`;
+}
+function renderAllBundleBreakdowns() {
+  document.querySelectorAll('#bundleList .subcard').forEach(renderBundleBreakdown);
+}
+
+function renderBundle(id, rooftops, products) {
+  const wrap = document.createElement('div');
+  wrap.className = 'subcard';
+  wrap.dataset.bundleId = id;
+  wrap.innerHTML = `
+    <div class="subcard-header" data-bundle-toggle>
+      <span class="title">Bundle ${id}</span>
+      <button type="button" class="icon-btn" data-bundle-delete>🗑</button>
+    </div>
+    <div class="subcard-body">
+      <div class="field"><label>Number of Rooftops <span class="req">*</span></label><input type="number" value="${rooftops}" data-bundle-rooftops></div>
+      <div class="field"><label>Select your Product(s) <span class="req">*</span></label>
+        <div class="checkbox-row" style="margin-top:8px;">
+          <label class="checkbox-item"><input type="checkbox" data-bundle-studio ${products.includes('studio') ? 'checked' : ''}> Studio AI</label>
+          <label class="checkbox-item"><input type="checkbox" data-bundle-vini ${products.includes('vini') ? 'checked' : ''}> Conversational AI</label>
+        </div>
+      </div>
+      <div class="inline-pricing-block" data-studio-block style="${products.includes('studio') ? '' : 'display:none;'}">
+        <div class="subcard-body" style="grid-template-columns:1fr 1fr;">
+          <div class="field"><label>Plan Type <span class="req">*</span></label><select data-bundle-plan><option value="">Select Plan</option><option value="lite">Lite</option><option value="pro" selected>Pro</option></select></div>
+          <div class="field"><label>VINs per rooftop <span class="req">*</span></label><input type="number" value="10" data-bundle-vins></div>
+          <div class="field field-full"><label>Existing Inventory per Rooftop</label><input type="text" placeholder="Enter existing inventory" data-bundle-existing-inv></div>
+          <div class="field field-full">
+            <div class="hint">Integration provider (CJI, CRM, Service scheduler, DMS) is set per rooftop in "Add Rooftop Details" below, not here — two rooftops on this bundle can run different systems.</div>
+          </div>
+          <div class="field field-full"><label>Add-on purchases</label>
+            <div class="checkbox-row" style="margin-top:8px;">
+              <label class="checkbox-item"><input type="checkbox" data-bundle-addon="smartMatch"> Smart Match <span class="badge">Monthly</span></label>
+              <label class="checkbox-item"><input type="checkbox" data-bundle-addon="smartCampaign"> Smart Campaign <span class="badge">Monthly</span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="inline-pricing-block" data-vini-block style="${products.includes('vini') ? '' : 'display:none;'}">
+        <div class="checkbox-row" style="margin-bottom:10px;">
+          <label class="checkbox-item"><input type="checkbox" checked data-bundle-vini-enable="inboundSales"> Sales Inbound</label>
+          <label class="checkbox-item"><input type="checkbox" data-bundle-vini-enable="outboundSales"> Sales Outbound</label>
+          <label class="checkbox-item"><input type="checkbox" checked data-bundle-vini-enable="inboundService"> Service Inbound</label>
+          <label class="checkbox-item"><input type="checkbox" data-bundle-vini-enable="outboundService"> Service Outbound</label>
+          <label class="checkbox-item"><input type="checkbox"> Reception Web Chat</label>
+        </div>
+        <table class="tbl">
+          <thead><tr><th></th><th>Sales Agent</th><th>Service Agent</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Inbound Volume</strong></td>
+              <td><input type="number" value="100" placeholder="Cars sold/month" data-bundle-vini-units="inboundSales"><div class="hint">Cars sold/month</div></td>
+              <td><input type="number" value="100" placeholder="ROs/month" data-bundle-vini-units="inboundService"><div class="hint">ROs/month</div></td>
+            </tr>
+            <tr><td><strong>Outbound Attempts</strong></td>
+              <td><input type="number" placeholder="Leads/month" disabled data-bundle-vini-units="outboundSales"><div class="hint">Leads/month</div></td>
+              <td><input type="number" placeholder="Leads/month" disabled data-bundle-vini-units="outboundService"><div class="hint">Leads/month</div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="inline-pricing-block" data-bundle-breakdown-mount></div>
+    </div>
+  `;
+  wrap.querySelector('[data-bundle-toggle]').addEventListener('click', (e) => {
+    if (e.target.closest('[data-bundle-delete]')) return;
+    wrap.querySelector('.subcard-body').classList.toggle('collapsed');
+  });
+  wrap.querySelector('[data-bundle-delete]').addEventListener('click', () => {
+    if (document.querySelectorAll('#bundleList .subcard').length <= 1) return;
+    wrap.remove();
+    syncRooftopBundleOptions();
+    syncRooftopRowsFromBundles();
+    refreshAllPricing();
+  });
+  wrap.querySelector('[data-bundle-studio]').addEventListener('change', (e) => {
+    wrap.querySelector('[data-studio-block]').style.display = e.target.checked ? '' : 'none';
+    refreshAllPricing();
+  });
+  wrap.querySelector('[data-bundle-vini]').addEventListener('change', (e) => {
+    wrap.querySelector('[data-vini-block]').style.display = e.target.checked ? '' : 'none';
+    refreshAllPricing();
+  });
+  wrap.querySelector('[data-bundle-rooftops]').addEventListener('input', () => {
+    syncRooftopBundleOptions(); syncRooftopRowsFromBundles(); refreshAllPricing();
+  });
+  wrap.querySelectorAll('[data-bundle-plan],[data-bundle-vins],[data-bundle-existing-inv],[data-bundle-addon]').forEach(el => {
+    el.addEventListener('input', refreshAllPricing);
+    el.addEventListener('change', refreshAllPricing);
+  });
+  wrap.querySelectorAll('[data-bundle-vini-enable]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const key = cb.dataset.bundleViniEnable;
+      wrap.querySelector(`[data-bundle-vini-units="${key}"]`).disabled = !cb.checked;
+      refreshAllPricing();
+    });
+  });
+  wrap.querySelectorAll('[data-bundle-vini-units]').forEach(el => el.addEventListener('input', refreshAllPricing));
+
+  document.getElementById('bundleList').appendChild(wrap);
+  syncRooftopBundleOptions();
+  syncRooftopRowsFromBundles();
+  refreshAllPricing();
+}
+document.getElementById('addBundleBtn').addEventListener('click', () => {
+  bundleCount++;
+  renderBundle(bundleCount, 1, ['studio']);
+});
+bundleCount++;
+renderBundle(bundleCount, 5, ['studio', 'vini']);
+
+// ---- Group Dealer: rooftop rows — auto-synced from bundle counts, not manually added ----
+// (group-rooftops-section-card.tsx: rows are derived from bundle rooftopsCount + reconciled
+// against contractedRooftops; there is no manual "add row" control in the live form.)
+function bundleOptionsHtml(selectedId) {
+  const cards = Array.from(document.querySelectorAll('#bundleList .subcard'));
+  return '<option value="">Unassigned</option>' + cards.map(c => `<option value="${c.dataset.bundleId}" ${c.dataset.bundleId === selectedId ? 'selected' : ''}>${c.querySelector('.title').textContent}</option>`).join('');
+}
+function syncRooftopBundleOptions() {
+  document.querySelectorAll('#rooftopRows select[data-rooftop-bundle]').forEach(sel => {
+    sel.innerHTML = bundleOptionsHtml(sel.value);
+  });
+  updateRooftopSumCheck();
+}
+// validation-utils.ts:73-112 — bundle rooftop counts must sum to exactly Contracted Rooftops
+function updateRooftopSumCheck() {
+  const el = document.getElementById('rooftopSumCheck');
+  if (!el) return;
+  const bundleSum = Array.from(document.querySelectorAll('#bundleList [data-bundle-rooftops]')).reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+  const contracted = Number(document.getElementById('contractedRooftopsInput')?.value) || 0;
+  const ok = bundleSum === contracted;
+  el.className = 'rooftop-sum-check ' + (ok ? 'ok' : 'mismatch');
+  el.textContent = ok
+    ? `✓ Bundle rooftops (${bundleSum}) match Contracted Rooftops (${contracted}).`
+    : `Bundle rooftops (${bundleSum}) must sum to exactly Contracted Rooftops (${contracted}).`;
+}
+
+function syncRooftopRowsFromBundles() {
+  const bundleCards = Array.from(document.querySelectorAll('#bundleList .subcard'));
+  const bundleCounts = bundleCards.map(c => ({ id: c.dataset.bundleId, count: Number(c.querySelector('[data-bundle-rooftops]').value) || 0 }));
+  const sumCounts = bundleCounts.reduce((s, b) => s + b.count, 0);
+  const contracted = Number(document.getElementById('contractedRooftopsInput')?.value) || 0;
+  const targetCount = Math.max(sumCounts, contracted);
+
+  const assignments = [];
+  bundleCounts.forEach(b => { for (let i = 0; i < b.count; i++) assignments.push(b.id); });
+  while (assignments.length < targetCount) assignments.push('');
+
+  const tbody = document.getElementById('rooftopRows');
+  const existingRows = Array.from(tbody.querySelectorAll('tr[data-rooftop-row]'));
+
+  for (let i = 0; i < targetCount; i++) {
+    let tr = existingRows[i];
+    if (!tr) {
+      tr = document.createElement('tr');
+      tr.dataset.rooftopRow = '1';
+      tr.innerHTML = `
+        <td><input type="text" placeholder="Enter rooftop name" data-rooftop-name></td>
+        <td><select data-rooftop-subtype><option value="">Select Rooftop SubType</option><option>Independent Dealer</option><option>Franchise Dealer</option><option>Mixed</option></select></td>
+        <td><select data-rooftop-bundle></select></td>
+        ${rooftopIntegrationCellHtml('cji')}
+        ${rooftopIntegrationCellHtml('crm')}
+        ${rooftopIntegrationCellHtml('service')}
+        ${rooftopIntegrationCellHtml('dms')}
+        <td class="center"><button type="button" class="icon-btn" data-rooftop-delete>🗑</button></td>
+      `;
+      tbody.appendChild(tr);
+      tr.querySelector('[data-rooftop-delete]').addEventListener('click', () => handleDeleteRooftopRow(tr));
+      tr.querySelector('[data-rooftop-bundle]').addEventListener('change', (e) => handleRooftopBundleChange(tr, e.target.value));
+      INTEGRATION_CAT_ORDER.forEach(catKey => {
+        tr.querySelector(`[data-rooftop-${catKey}]`).addEventListener('change', (e) => onRooftopIntegrationChange(e.target, catKey));
+      });
+    }
+    const bundleSelect = tr.querySelector('[data-rooftop-bundle]');
+    bundleSelect.innerHTML = bundleOptionsHtml(assignments[i]);
+    tr.dataset.currentBundle = assignments[i] || '';
+  }
+  for (let i = targetCount; i < existingRows.length; i++) existingRows[i].remove();
+
+  updateRooftopSumCheck();
+}
+function handleDeleteRooftopRow(tr) {
+  const bundleId = tr.dataset.currentBundle;
+  if (bundleId) {
+    const card = document.querySelector(`#bundleList .subcard[data-bundle-id="${bundleId}"]`);
+    if (card) { const inp = card.querySelector('[data-bundle-rooftops]'); inp.value = Math.max((Number(inp.value) || 0) - 1, 0); }
+  }
+  const contractedInput = document.getElementById('contractedRooftopsInput');
+  contractedInput.value = Math.max((Number(contractedInput.value) || 0) - 1, 0);
+  tr.remove();
+  syncRooftopRowsFromBundles();
+  refreshAllPricing();
+}
+function handleRooftopBundleChange(tr, newBundleId) {
+  const oldBundleId = tr.dataset.currentBundle || '';
+  if (oldBundleId && oldBundleId !== newBundleId) {
+    const oldCard = document.querySelector(`#bundleList .subcard[data-bundle-id="${oldBundleId}"]`);
+    if (oldCard) { const inp = oldCard.querySelector('[data-bundle-rooftops]'); inp.value = Math.max((Number(inp.value) || 0) - 1, 0); }
+  }
+  if (newBundleId && newBundleId !== oldBundleId) {
+    const newCard = document.querySelector(`#bundleList .subcard[data-bundle-id="${newBundleId}"]`);
+    if (newCard) { const inp = newCard.querySelector('[data-bundle-rooftops]'); inp.value = (Number(inp.value) || 0) + 1; }
+  }
+  tr.dataset.currentBundle = newBundleId;
+  syncRooftopRowsFromBundles();
+  refreshAllPricing();
+}
+document.getElementById('contractedRooftopsInput')?.addEventListener('input', () => { syncRooftopRowsFromBundles(); });
+
+// ==================== BILLING SUMMARY (live aggregation) ====================
+function billingFrequencyLabel(freq) {
+  const map = { 1: 'Monthly', 3: 'Quarterly', 6: 'Half Yearly', 12: 'Yearly' };
+  return map[freq] || '—';
+}
+function aggregateForSummary(rows, labelFn) {
+  const groups = {};
+  rows.forEach(r => {
+    const label = labelFn(r);
+    if (!groups[label]) groups[label] = { mrp: 0, final: 0, oneTime: 0, monthly: 0, annual: 0 };
+    groups[label].mrp += r.mrp;
+    groups[label].final += r.finalPrice;
+    if (r.frequency === 'One-Time') groups[label].oneTime += r.finalPrice;
+    else groups[label].monthly += r.finalPrice;
+  });
+  return Object.entries(groups).map(([name, g]) => ({ name, oneTimeFee: g.oneTime, monthlyRecurringFee: g.monthly, annualRecurringFee: g.annual, discountApplied: calcDiscountPercentage(g.mrp, g.final) }));
+}
+function individualLabelFn(r) {
+  if (r.product === 'Studio') return r.type === 'Setup Fee' ? 'Studio Setup' : `Studio ${r.type.replace(/ Plan$/, '')}`;
+  if (r.product === 'Add-on') return 'Studio Add-ons';
+  return `${r.product}-${r.type}`;
+}
+function renderBillingSummary() {
+  const ct = currentCt;
+  const freq = Number(document.getElementById('billingFrequencySelect').value) || 1;
+  const term = Number(document.getElementById('contractTermSelect').value) || 0;
+  document.getElementById('summaryBillingFreq').textContent = billingFrequencyLabel(freq);
+  document.getElementById('summaryContractDuration').textContent = term ? `${term} months` : '—';
+
+  let rowsHtml = '';
+  let totalOneTime = 0, totalMonthly = 0, totalAnnual = 0;
+
+  if (ct === 'group') {
+    document.querySelectorAll('#bundleList .subcard').forEach(card => {
+      const bundleLabel = card.querySelector('.title').textContent;
+      const rooftopsCount = Number(card.querySelector('[data-bundle-rooftops]').value) || 0;
+      const scale = rooftopsCount > 0 ? rooftopsCount : 1;
+      const { studioRows, viniRows } = computeBundleRows(card);
+      const allRows = [...studioRows, ...viniRows];
+      const grouped = {};
+      allRows.forEach(r => {
+        const label = r.product === 'Studio' ? (r.type === 'Setup Fee' ? 'Studio Setup Fee' : `Studio ${r.type.replace(/ Plan$/, '')}`) : r.product === 'Add-on' ? 'Studio Add-ons' : `${r.product}-${r.type}`;
+        if (!grouped[label]) grouped[label] = { oneTime: 0, monthly: 0, annual: 0 };
+        const amt = r.finalPrice * scale;
+        if (r.frequency === 'One-Time') grouped[label].oneTime += amt; else grouped[label].monthly += amt;
+      });
+      const labels = Object.keys(grouped);
+      if (!labels.length) return;
+      labels.forEach((label, i) => {
+        const g = grouped[label];
+        totalOneTime += g.oneTime; totalMonthly += g.monthly; totalAnnual += g.annual;
+        rowsHtml += `<tr>
+          ${i === 0 ? `<td class="group-only-field center" rowspan="${labels.length}">${bundleLabel}<br>(${rooftopsCount} Rooftops)</td>` : ''}
+          <td>${label}</td>
+          <td class="onetime-col right">${g.oneTime > 0 ? money(g.oneTime, CURRENCY) : '-'}</td>
+          <td class="right">${g.monthly > 0 ? money(g.monthly, CURRENCY) : '-'}</td>
+          <td class="right">${g.annual > 0 ? money(g.annual, CURRENCY) : '-'}</td>
+          <td class="discount-col">-</td>
+        </tr>`;
+      });
+    });
+    INTEGRATION_CAT_ORDER.forEach(catKey => {
+      const d = computeIntegrationCategory(catKey);
+      if (!d.applicable || d.applicableCount === 0) return;
+      totalOneTime += d.oneTimeTotal; totalMonthly += d.offeredMonthlyTotal;
+      rowsHtml += `<tr>
+        <td class="group-only-field center">Integration<br>(${d.applicableCount} Rooftop${d.applicableCount === 1 ? '' : 's'})</td>
+        <td>Integration — ${d.label}</td>
+        <td class="onetime-col right">${d.oneTimeTotal > 0 ? money(d.oneTimeTotal, CURRENCY) : '-'}</td>
+        <td class="right">${d.offeredMonthlyTotal > 0 ? money(d.offeredMonthlyTotal, CURRENCY) : '-'}</td>
+        <td class="right">-</td>
+        <td class="discount-col">-</td>
+      </tr>`;
+    });
+    if (!rowsHtml) rowsHtml = `<tr><td colspan="6" class="tbl-empty-row">No data (Select Studio or Vini pricing details to see the billing summary)</td></tr>`;
+    else rowsHtml += `<tr class="total-row"><td class="group-only-field"></td><td>Net Payable</td><td class="onetime-col right">${money(totalOneTime, CURRENCY)}</td><td class="right">${money(totalMonthly, CURRENCY)}</td><td class="right">${money(totalAnnual, CURRENCY)}</td><td class="discount-col"></td></tr>`;
+    document.getElementById('grpNetOneTime').textContent = money(totalOneTime, CURRENCY);
+    document.getElementById('grpNetMonthly').textContent = money(totalMonthly, CURRENCY);
+    document.getElementById('grpNetAnnual').textContent = money(totalAnnual, CURRENCY);
+  } else if (ct === 'reseller') {
+    const summaryRows = [];
+    document.querySelectorAll('table[data-reseller-table] tbody tr[data-row-key]').forEach(tr => {
+      if (!tr.querySelector('[data-f="enabled"]').checked) return;
+      const cost = parseFloat(tr.querySelector('[data-f="cost"]').textContent.replace('$', '')) || 0;
+      const offered = parseFloat(tr.querySelector('[data-f="offered"]').value) || 0;
+      if (offered <= 0) return;
+      const label = tr.querySelector('.checkbox-item').textContent.trim();
+      summaryRows.push({ name: label, monthlyRecurringFee: offered, discountApplied: calcDiscountPercentage(cost, offered) });
+    });
+    if (!summaryRows.length) {
+      rowsHtml = `<tr><td colspan="5" class="tbl-empty-row">Select Studio or Vini pricing details to see the billing summary</td></tr>`;
+    } else {
+      summaryRows.forEach(r => {
+        totalMonthly += r.monthlyRecurringFee;
+        rowsHtml += `<tr><td>${r.name}</td><td class="right">${money(r.monthlyRecurringFee, CURRENCY)}</td><td class="right">-</td><td class="discount-col right" style="color:var(--success);font-weight:600;">${pctFmt(r.discountApplied)}</td></tr>`;
+      });
+      rowsHtml += `<tr class="total-row"><td>Total</td><td class="right">${money(totalMonthly, CURRENCY)}</td><td class="right">-</td><td class="discount-col"></td></tr>`;
+    }
+  } else {
+    const studioRows = computeStudioRows('ind-studio', readIndStudioState());
+    const viniRows = computeViniRows('ind-vini', readIndViniState());
+    const summaryRows = aggregateForSummary([...studioRows, ...viniRows], individualLabelFn);
+    INTEGRATION_CAT_ORDER.forEach(catKey => {
+      const d = computeIntegrationCategory(catKey);
+      if (!d.applicable || d.applicableCount === 0) return;
+      summaryRows.push({ name: 'Integration — ' + d.label, oneTimeFee: d.oneTimeTotal, monthlyRecurringFee: d.offeredMonthlyTotal, annualRecurringFee: 0, discountApplied: d.monthlyTotal > 0 ? ((d.monthlyTotal - d.offeredMonthlyTotal) / d.monthlyTotal) * 100 : 0 });
+    });
+    if (!summaryRows.length) {
+      rowsHtml = `<tr><td colspan="5" class="tbl-empty-row">Select Studio or Vini pricing details to see the billing summary</td></tr>`;
+    } else {
+      summaryRows.forEach(r => {
+        totalOneTime += r.oneTimeFee; totalMonthly += r.monthlyRecurringFee; totalAnnual += r.annualRecurringFee;
+        rowsHtml += `<tr><td>${r.name}</td><td class="onetime-col right">${r.oneTimeFee > 0 ? money(r.oneTimeFee, CURRENCY) : '-'}</td><td class="right">${r.monthlyRecurringFee > 0 ? money(r.monthlyRecurringFee, CURRENCY) : '-'}</td><td class="right">${r.annualRecurringFee > 0 ? money(r.annualRecurringFee, CURRENCY) : '-'}</td><td class="discount-col right" style="color:var(--success);font-weight:600;">${r.discountApplied > 0 ? pctFmt(r.discountApplied) : '-'}</td></tr>`;
+      });
+      rowsHtml += `<tr class="total-row"><td>Total</td><td class="onetime-col right">${money(totalOneTime, CURRENCY)}</td><td class="right">${money(totalMonthly, CURRENCY)}</td><td class="right">${money(totalAnnual, CURRENCY)}</td><td class="discount-col"></td></tr>`;
+    }
+  }
+
+  document.getElementById('summaryRows').innerHTML = rowsHtml;
+  document.getElementById('netOneTime').textContent = money(totalOneTime, CURRENCY);
+  document.getElementById('netMonthly').textContent = money(totalMonthly, CURRENCY);
+  document.getElementById('netAnnual').textContent = money(totalAnnual, CURRENCY);
+}
+
+function refreshAllPricing() {
+  renderIndividualBreakdowns();
+  renderResellerTables();
+  renderAllBundleBreakdowns();
+  refreshRooftopIntegrationGating();
+  renderIntegrationCostSummary();
+  renderBillingSummary();
+}
+
+applyCt('individual');
+onIndStudioChange();
+onIndViniChange();
+
+// close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(ov => {
+  ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); });
+});
+</script>
+
+</body>
+</html>
