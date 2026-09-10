@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wallet ops, Spyne admin, prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" rel="stylesheet">
+<style>
+/* ==================================================================
+   Spyne Design OS tokens v2.1.0, inlined verbatim (relevant subset)
+   from .spyne-design/spyne-tokens.css so this file is fully standalone.
+   Same subset as projects/recall-wallet/prototypes/recall-wallet-prototype.html.
+   ================================================================== */
+:root {
+  --spyne-surface-bg-canvas: #FAFAFF;
+  --spyne-surface-bg-default: #FFFFFF;
+  --spyne-surface-bg-sunken: #F1F1F5;
+  --spyne-surface-bg-wash: #F1F1F5;
+  --spyne-surface-bg-brand: #522EBF;
+  --spyne-surface-bg-brand-hover: #44259E;
+  --spyne-surface-bg-brand-subtle: #F1EDFB;
+  --spyne-surface-bg-brand-subtle-hover: #E4DCF8;
+  --spyne-surface-bg-success: #008743;
+  --spyne-surface-bg-success-subtle: #EBFAF3;
+  --spyne-surface-bg-danger: #D92D20;
+  --spyne-surface-bg-danger-subtle: #FFF5F5;
+  --spyne-surface-bg-info: #0369A1;
+  --spyne-surface-bg-info-subtle: #F0F9FF;
+  --spyne-surface-bg-pending: #F97316;
+  --spyne-surface-bg-pending-subtle: #FFF7ED;
+
+  --spyne-text-default: #262C42;
+  --spyne-text-subtle: #4C495D;
+  --spyne-text-muted: #68657A;
+  --spyne-text-disabled: #AAA8BD;
+  --spyne-text-brand: #522EBF;
+  --spyne-text-success: #008743;
+  --spyne-text-danger: #B42318;
+  --spyne-text-info: #0369A1;
+  --spyne-text-pending: #C2410C;
+  --spyne-text-on-brand: #FFFFFF;
+  --spyne-text-on-success: #FFFFFF;
+  --spyne-text-on-danger: #FFFFFF;
+  --spyne-text-on-info: #FFFFFF;
+  --spyne-text-on-pending: #262C42;
+
+  --spyne-icon-default: #4C495D;
+  --spyne-icon-subtle: #86839A;
+  --spyne-icon-muted: #86839A;
+  --spyne-icon-brand: #522EBF;
+  --spyne-icon-success: #00A251;
+  --spyne-icon-danger: #D92D20;
+  --spyne-icon-info: #0284C7;
+  --spyne-icon-pending: #EA580C;
+
+  --spyne-border-default: #E1E3E9;
+  --spyne-border-subtle: #F1F1F5;
+  --spyne-border-strong: #C4C2D1;
+  --spyne-border-control: #86839A;
+  --spyne-border-focus: #6843CC;
+  --spyne-border-brand: #522EBF;
+  --spyne-border-success: #00A251;
+  --spyne-border-danger: #D92D20;
+  --spyne-border-info: #0284C7;
+  --spyne-border-pending: #F97316;
+
+  --spyne-heading-h3-size: 24px;
+  --spyne-heading-h4-size: 20px;
+  --spyne-body-sm-size: 14px;
+  --spyne-body-sm-weight: 500;
+  --spyne-caption-size: 12px;
+  --spyne-caption-xs-size: 10px;
+  --spyne-micro-size: 8px;
+  --spyne-display-lg-size: 40px;
+
+  --spyne-house-eyebrow-size: 10px;
+  --spyne-house-eyebrow-weight: 600;
+  --spyne-house-eyebrow-tracking: 0.9px;
+  --spyne-house-hero-size: 28px;
+  --spyne-house-hero-weight: 700;
+  --spyne-house-hero-tracking: -0.6px;
+  --spyne-house-section-size: 20px;
+  --spyne-house-section-weight: 700;
+  --spyne-house-card-title-size: 16px;
+  --spyne-house-card-title-weight: 700;
+  --spyne-house-body-size: 14px;
+  --spyne-house-body-weight: 400;
+  --spyne-house-body-line-height: 20px;
+  --spyne-house-caption-size: 12px;
+
+  --spyne-radius-control-xs: 4px;
+  --spyne-radius-control-sm: 8px;
+  --spyne-radius-control-md: 12px;
+  --spyne-radius-container-sm: 8px;
+  --spyne-radius-container-md: 12px;
+  --spyne-radius-container-lg: 16px;
+  --spyne-radius-container-xl: 20px;
+  --spyne-radius-pill: 9999px;
+  --spyne-radius-dialog: 24px;
+
+  --spyne-space-control-sm: 40px;
+  --spyne-space-scale-none: 0;
+  --spyne-space-scale-xs: 8px;
+  --spyne-space-scale-sm: 12px;
+  --spyne-space-scale-md: 16px;
+  --spyne-space-scale-lg: 24px;
+  --spyne-space-scale-xl: 32px;
+  --spyne-space-scale-2xl: 48px;
+
+  --spyne-gradient-brand: linear-gradient(135deg, #4612C6 0%, #AA91E9 100%);
+  --spyne-gradient-brand-hover: linear-gradient(135deg, #350D96 0%, #7E5FD0 100%);
+
+  --spyne-shadow-panel: 0 2px 8px 0 rgb(31 30 42 / 0.06), 0 8px 24px -4px rgb(31 30 42 / 0.04);
+  --spyne-shadow-card: 0 2px 8px 0 rgb(31 30 42 / 0.04), 0 12px 32px -8px rgb(31 30 42 / 0.06);
+  --spyne-shadow-card-lifted: 0 4px 12px -2px rgb(31 30 42 / 0.05), 0 20px 48px -12px rgb(31 30 42 / 0.08);
+  --spyne-shadow-focus-ring: 0 0 0 2px #FFFFFF, 0 0 0 4px rgb(104 67 204 / 0.40);
+  --spyne-shadow-drawer: -16px 0 46px 0 rgb(31 30 42 / 0.20);
+  --spyne-overlay-backdrop: rgb(20 16 40 / 0.35);
+
+  --spyne-duration-fast: 150ms;
+  --spyne-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  --spyne-font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --spyne-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --spyne-btn-sm-height: 40px;
+  --spyne-btn-md-height: 44px;
+
+  --spyne-brand-appbar-height: 60px;
+}
+
+/* ==================================================================
+   Spyne Design OS component kit v2.1.0, inlined verbatim (relevant
+   subset) from .spyne-design/spyne-kit.css.
+   ================================================================== */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+.spyne-app { background: var(--spyne-surface-bg-canvas); color: var(--spyne-text-default); font-family: var(--spyne-font-sans); font-size: var(--spyne-house-body-size); font-weight: var(--spyne-house-body-weight); line-height: var(--spyne-house-body-line-height); -webkit-font-smoothing: antialiased; min-height: 100vh; }
+
+.material-symbols-outlined { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-smoothing: antialiased; }
+
+.spyne-eyebrow { display: block; font-size: var(--spyne-house-eyebrow-size); font-weight: var(--spyne-house-eyebrow-weight); letter-spacing: var(--spyne-house-eyebrow-tracking); text-transform: uppercase; color: var(--spyne-text-muted); }
+.spyne-hero-title { font-size: var(--spyne-house-hero-size); font-weight: var(--spyne-house-hero-weight); letter-spacing: var(--spyne-house-hero-tracking); line-height: 1.2; color: var(--spyne-text-default); margin: 0; }
+.spyne-card-title { font-size: var(--spyne-house-card-title-size); font-weight: var(--spyne-house-card-title-weight); color: var(--spyne-text-default); margin: 0; }
+.spyne-body { font-size: var(--spyne-house-body-size); font-weight: 400; line-height: var(--spyne-house-body-line-height); color: var(--spyne-text-subtle); margin: 0; }
+.spyne-caption { font-size: var(--spyne-house-caption-size); font-weight: 400; color: var(--spyne-text-muted); margin: 0; }
+
+.spyne-stack { display: flex; flex-direction: column; gap: var(--spyne-space-scale-lg); }
+.spyne-stack[hidden] { display: none; }
+.spyne-row { display: flex; align-items: center; gap: var(--spyne-space-scale-sm); flex-wrap: wrap; }
+
+.spyne-panel { border-radius: var(--spyne-radius-container-lg); border: 1px solid var(--spyne-border-subtle); background: var(--spyne-surface-bg-default); box-shadow: var(--spyne-shadow-panel); overflow: hidden; }
+.spyne-panel__header { padding: var(--spyne-space-scale-lg); }
+
+.spyne-btn, [class^="spyne-btn-"] { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: var(--spyne-radius-control-md); font-family: inherit; font-size: var(--spyne-body-sm-size); font-weight: var(--spyne-body-sm-weight); line-height: 1; white-space: nowrap; cursor: pointer; border: 1px solid transparent; transition: background-color var(--spyne-duration-fast) var(--spyne-ease-standard), border-color var(--spyne-duration-fast) var(--spyne-ease-standard), filter var(--spyne-duration-fast) var(--spyne-ease-standard); }
+.spyne-btn--sm { height: var(--spyne-btn-sm-height); padding-inline: 14px; }
+.spyne-btn-primary { background: var(--spyne-gradient-brand); color: var(--spyne-text-on-brand); border-color: transparent; }
+.spyne-btn-primary:hover { background: var(--spyne-gradient-brand-hover); }
+.spyne-btn-secondary-neutral { background: var(--spyne-surface-bg-default); border-color: var(--spyne-border-default); color: var(--spyne-text-default); }
+.spyne-btn-secondary-neutral:hover { background: var(--spyne-surface-bg-sunken); }
+.spyne-btn-ghost { background: transparent; color: var(--spyne-text-brand); }
+.spyne-btn-ghost:hover { background: var(--spyne-surface-bg-brand-subtle); }
+.spyne-btn-link { display: inline-flex; align-items: center; gap: 4px; height: auto; padding: 0; border: none; background: none; font-family: inherit; font-size: var(--spyne-body-sm-size); font-weight: 500; color: var(--spyne-text-brand); cursor: pointer; }
+.spyne-btn-link:hover { text-decoration: underline; }
+[class^="spyne-btn-"]:focus-visible { outline: none; box-shadow: var(--spyne-shadow-focus-ring); }
+
+.spyne-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: var(--spyne-radius-control-xs); border: 1px solid transparent; padding: 3px 7px; font-size: var(--spyne-caption-size); font-weight: 500; line-height: 1.35; white-space: nowrap; }
+.spyne-badge--neutral { background: var(--spyne-surface-bg-sunken); color: var(--spyne-text-subtle); border-color: var(--spyne-border-default); }
+.spyne-badge--brand   { background: var(--spyne-surface-bg-brand-subtle); color: var(--spyne-text-brand); border-color: var(--spyne-border-brand); }
+.spyne-badge--success { background: var(--spyne-surface-bg-success-subtle); color: var(--spyne-text-success); border-color: var(--spyne-border-success); }
+.spyne-badge--danger  { background: var(--spyne-surface-bg-danger-subtle); color: var(--spyne-text-danger); border-color: var(--spyne-border-danger); }
+.spyne-badge--info    { background: var(--spyne-surface-bg-info-subtle); color: var(--spyne-text-info); border-color: var(--spyne-border-info); }
+
+.spyne-segmented { display: inline-flex; align-items: stretch; border: 1px solid var(--spyne-border-default); border-radius: var(--spyne-radius-control-md); background: var(--spyne-surface-bg-default); overflow: hidden; }
+.spyne-segmented__btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--spyne-space-control-sm); padding: 0 14px; font-family: inherit; font-size: var(--spyne-caption-size); font-weight: 500; color: var(--spyne-text-muted); background: transparent; border: none; cursor: pointer; transition: background-color var(--spyne-duration-fast) var(--spyne-ease-standard), color var(--spyne-duration-fast) var(--spyne-ease-standard); }
+.spyne-segmented__btn:not(:last-child) { border-right: 1px solid var(--spyne-border-default); }
+.spyne-segmented__btn[aria-pressed="true"] { background: var(--spyne-surface-bg-brand-subtle); color: var(--spyne-text-brand); font-weight: 600; }
+.spyne-segmented__btn:focus-visible { outline: none; box-shadow: var(--spyne-shadow-focus-ring); }
+
+.spyne-chip { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--spyne-radius-control-md); border: 1px solid var(--spyne-border-default); background: var(--spyne-surface-bg-default); padding: 6px 12px; font-family: inherit; font-size: var(--spyne-caption-size); font-weight: 500; color: var(--spyne-text-subtle); cursor: pointer; transition: border-color var(--spyne-duration-fast) var(--spyne-ease-standard), background-color var(--spyne-duration-fast) var(--spyne-ease-standard); }
+.spyne-chip:hover { border-color: var(--spyne-border-strong); }
+.spyne-chip[aria-pressed="true"] { background: var(--spyne-surface-bg-brand-subtle); border-color: var(--spyne-border-brand); color: var(--spyne-text-brand); font-weight: 600; }
+.spyne-chip:focus-visible { outline: none; box-shadow: var(--spyne-shadow-focus-ring); }
+
+.spyne-input, .spyne-select { min-height: var(--spyne-space-control-sm); padding: 0 12px; border-radius: var(--spyne-radius-control-md); border: 1px solid var(--spyne-border-control); background: var(--spyne-surface-bg-default); font-family: inherit; font-size: var(--spyne-house-body-size); color: var(--spyne-text-default); transition: border-color var(--spyne-duration-fast) var(--spyne-ease-standard), box-shadow var(--spyne-duration-fast) var(--spyne-ease-standard); }
+.spyne-select { appearance: none; padding-right: 32px; cursor: pointer; font-weight: 500; }
+.spyne-input:focus, .spyne-select:focus { outline: none; border-color: var(--spyne-border-focus); box-shadow: var(--spyne-shadow-focus-ring); }
+.spyne-select-wrap { position: relative; display: inline-block; }
+.spyne-select-wrap__chevron { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--spyne-icon-muted); }
+
+.spyne-table { width: 100%; border-collapse: collapse; font-size: var(--spyne-house-body-size); color: var(--spyne-text-default); }
+.spyne-table thead tr { background: var(--spyne-surface-bg-sunken); border-bottom: 1px solid var(--spyne-border-subtle); }
+.spyne-table th { padding: 10px var(--spyne-space-scale-md); text-align: left; vertical-align: middle; font-size: var(--spyne-house-caption-size); font-weight: 600; color: var(--spyne-text-muted); white-space: nowrap; }
+.spyne-table tbody tr { border-bottom: 1px solid var(--spyne-border-subtle); background: var(--spyne-surface-bg-default); transition: background-color var(--spyne-duration-fast) var(--spyne-ease-standard); }
+.spyne-table tbody tr:hover { background: var(--spyne-surface-bg-brand-subtle); }
+.spyne-table tbody tr:last-child { border-bottom: none; }
+.spyne-table td { padding: var(--spyne-space-scale-sm) var(--spyne-space-scale-md); vertical-align: middle; }
+.spyne-table__meta { font-size: var(--spyne-house-caption-size); color: var(--spyne-text-muted); font-variant-numeric: tabular-nums; }
+.spyne-table__num { text-align: right; font-variant-numeric: tabular-nums; }
+.spyne-table-scroll { overflow-x: auto; }
+
+.spyne-list-row { display: flex; align-items: center; gap: var(--spyne-space-scale-sm); width: 100%; text-align: left; border-radius: var(--spyne-radius-container-md); border: none; background: var(--spyne-surface-bg-default); box-shadow: var(--spyne-shadow-card-lifted); padding: var(--spyne-space-scale-md); font-family: inherit; }
+.spyne-list-row__main { min-width: 0; flex: 1 1 auto; }
+.spyne-list-row__name { font-size: var(--spyne-house-body-size); font-weight: 600; color: var(--spyne-text-default); }
+.spyne-list-row__meta { font-size: var(--spyne-house-caption-size); color: var(--spyne-text-muted); margin-top: 2px; }
+.spyne-list-row__trailing { margin-left: auto; flex-shrink: 0; display: flex; align-items: center; gap: var(--spyne-space-scale-sm); }
+.spyne-row-accent-danger  { box-shadow: inset 3px 0 0 var(--spyne-border-danger), var(--spyne-shadow-card-lifted); }
+.spyne-row-accent-success { box-shadow: inset 3px 0 0 var(--spyne-border-success), var(--spyne-shadow-card-lifted); }
+.spyne-row-accent-info    { box-shadow: inset 3px 0 0 var(--spyne-border-info), var(--spyne-shadow-card-lifted); }
+
+.spyne-kpi-card { position: relative; width: 100%; max-width: 340px; min-height: 178px; background: var(--spyne-surface-bg-default); border: 1px solid var(--spyne-border-subtle); border-radius: var(--spyne-radius-container-lg); padding: var(--spyne-space-scale-lg); overflow: hidden; box-shadow: var(--spyne-shadow-card); }
+.spyne-kpi-card__head { position: relative; display: flex; align-items: center; gap: 8px; }
+.spyne-kpi-card__icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--spyne-radius-control-sm); background: var(--spyne-surface-bg-brand-subtle); color: var(--spyne-icon-brand); flex-shrink: 0; }
+.spyne-kpi-card__title { font-size: var(--spyne-body-sm-size); font-weight: 600; color: var(--spyne-text-muted); }
+.spyne-kpi-card__value { position: relative; font-size: var(--spyne-display-lg-size); font-weight: 800; letter-spacing: -1.2px; color: var(--spyne-text-default); margin-top: var(--spyne-space-scale-sm); font-variant-numeric: tabular-nums; }
+.spyne-kpi-card__unit { font-size: var(--spyne-heading-h4-size); font-weight: 800; margin-left: 4px; color: var(--spyne-text-muted); }
+.spyne-kpi-card__div { position: relative; border: 0; border-top: 1px solid var(--spyne-border-subtle); margin: 14px 0 10px; }
+.spyne-kpi-card__legend { position: relative; font-size: var(--spyne-house-caption-size); color: var(--spyne-text-muted); }
+
+.spyne-empty { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: var(--spyne-space-scale-2xl) var(--spyne-space-scale-lg); }
+.spyne-empty[hidden] { display: none; }
+.spyne-empty__icon { color: var(--spyne-icon-muted); opacity: 0.6; }
+.spyne-empty__title { font-size: var(--spyne-house-card-title-size); font-weight: 700; color: var(--spyne-text-default); }
+.spyne-empty__body { font-size: var(--spyne-house-body-size); color: var(--spyne-text-muted); max-width: 44ch; }
+.spyne-skeleton { background: var(--spyne-surface-bg-sunken); border-radius: var(--spyne-radius-control-sm); animation: spyne-pulse 1.5s var(--spyne-ease-standard) infinite; }
+@keyframes spyne-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .spyne-skeleton { animation: none; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+.spyne-backdrop { position: fixed; inset: 0; background: var(--spyne-overlay-backdrop); z-index: 50; }
+.spyne-drawer { border-radius: var(--spyne-radius-container-xl) 0 0 var(--spyne-radius-container-xl); background: var(--spyne-surface-bg-default); box-shadow: var(--spyne-shadow-drawer); }
+
+/* ==================================================================
+   Page shell, local to this prototype, matching the pattern used in
+   projects/integration-fee/prototypes/*.html (proto-topbar / proto-sidebar).
+   ================================================================== */
+.proto-topbar { height: var(--spyne-brand-appbar-height); display: flex; align-items: center; padding: 0 var(--spyne-space-scale-lg); border-bottom: 1px solid var(--spyne-border-subtle); background: var(--spyne-surface-bg-default); }
+.proto-topbar__title { font-size: var(--spyne-house-card-title-size); font-weight: 700; color: var(--spyne-text-default); }
+.proto-topbar__avatar { margin-left: auto; width: 32px; height: 32px; border-radius: var(--spyne-radius-pill); background: var(--spyne-gradient-brand); }
+.proto-body { display: flex; align-items: flex-start; }
+.proto-sidebar { width: 210px; flex-shrink: 0; border-right: 1px solid var(--spyne-border-subtle); padding: var(--spyne-space-scale-lg) var(--spyne-space-scale-sm); background: var(--spyne-surface-bg-default); position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto; }
+.proto-sidebar__group { margin-bottom: var(--spyne-space-scale-lg); }
+.proto-sidebar__group-label { font-size: var(--spyne-house-eyebrow-size); font-weight: 600; letter-spacing: var(--spyne-house-eyebrow-tracking); text-transform: uppercase; color: var(--spyne-text-muted); padding: 0 10px 6px; }
+.proto-sidebar__link { display: block; padding: 7px 10px; border-radius: var(--spyne-radius-control-md); font-size: var(--spyne-house-body-size); color: var(--spyne-text-subtle); text-decoration: none; margin-bottom: 1px; }
+.proto-sidebar__link--active { background: var(--spyne-surface-bg-brand-subtle); color: var(--spyne-text-brand); font-weight: 600; }
+.proto-main { flex: 1 1 auto; min-width: 0; }
+.proto-container { max-width: 1120px; margin: 0 auto; padding: var(--spyne-space-scale-xl) var(--spyne-space-scale-lg); }
+.proto-kpi-row { display: flex; gap: var(--spyne-space-scale-lg); flex-wrap: wrap; }
+.proto-field { display: flex; flex-direction: column; gap: 6px; }
+.proto-field label { font-size: var(--spyne-house-caption-size); font-weight: 600; color: var(--spyne-text-default); }
+.proto-field .spyne-input, .proto-field .spyne-select { width: 100%; }
+.proto-field__note { font-size: var(--spyne-house-caption-size); color: var(--spyne-text-muted); }
+.proto-confirm { display: flex; align-items: center; gap: 8px; padding: 10px var(--spyne-space-scale-md); border-radius: var(--spyne-radius-control-md); background: var(--spyne-surface-bg-success-subtle); color: var(--spyne-text-success); font-size: var(--spyne-house-body-size); font-weight: 500; }
+.proto-amount { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.proto-amount .material-symbols-outlined { color: var(--spyne-icon-muted); }
+.proto-order-id { font-family: var(--spyne-font-mono); font-size: var(--spyne-house-caption-size); color: var(--spyne-text-default); }
+.proto-status-value { display: flex; align-items: center; gap: 8px; margin-top: var(--spyne-space-scale-sm); font-size: var(--spyne-heading-h3-size); font-weight: 800; letter-spacing: -0.6px; }
+.proto-drawer-wrap { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: flex-end; }
+.proto-drawer-wrap[hidden] { display: none; }
+.proto-drawer { width: 480px; max-width: 100%; height: 100%; overflow-y: auto; padding: var(--spyne-space-scale-xl) var(--spyne-space-scale-lg); }
+.proto-rooftop-row { cursor: pointer; }
+.proto-divider { border: 0; border-top: 1px solid var(--spyne-border-subtle); margin: 0; }
+.proto-alert { border-radius: var(--spyne-radius-container-lg); border: 1px solid var(--spyne-border-danger); background: var(--spyne-surface-bg-danger-subtle); padding: var(--spyne-space-scale-lg); }
+.proto-alert__title { font-size: var(--spyne-house-body-size); font-weight: 700; color: var(--spyne-text-danger); }
+.proto-alert__subtitle { font-size: var(--spyne-house-caption-size); font-weight: 600; color: var(--spyne-text-danger); margin-top: 4px; }
+.proto-alert__div { border: 0; border-top: 1px solid var(--spyne-border-danger); opacity: 0.3; margin: var(--spyne-space-scale-md) 0; }
+.proto-alert__meta-grid { display: flex; gap: var(--spyne-space-scale-lg); flex-wrap: wrap; }
+.proto-alert__meta-label { display: block; font-size: var(--spyne-caption-xs-size); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--spyne-text-danger); opacity: 0.75; }
+.proto-alert__meta-value { font-size: var(--spyne-house-body-size); font-weight: 600; color: var(--spyne-text-default); margin-top: 2px; }
+.proto-currency-input { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-height: var(--spyne-space-control-sm); padding: 0 12px; border-radius: var(--spyne-radius-control-md); border: 1px solid var(--spyne-border-control); background: var(--spyne-surface-bg-default); transition: border-color var(--spyne-duration-fast) var(--spyne-ease-standard), box-shadow var(--spyne-duration-fast) var(--spyne-ease-standard); }
+.proto-currency-input:focus-within { border-color: var(--spyne-border-focus); box-shadow: var(--spyne-shadow-focus-ring); }
+.proto-currency-input__prefix { color: var(--spyne-text-muted); font-weight: 600; }
+.proto-currency-input input { border: none; padding: 0; flex: 1 1 auto; min-width: 0; font-family: inherit; font-size: var(--spyne-house-body-size); color: var(--spyne-text-default); background: transparent; }
+.proto-currency-input input:focus { outline: none; box-shadow: none; }
+.proto-code-chip { display: inline-flex; align-items: center; border-radius: var(--spyne-radius-control-sm); background: var(--spyne-surface-bg-sunken); padding: 5px 10px; font-family: var(--spyne-font-mono); font-size: var(--spyne-house-caption-size); color: var(--spyne-text-subtle); }
+.proto-ledger-card { border: 1px solid var(--spyne-border-subtle); border-radius: var(--spyne-radius-container-md); padding: var(--spyne-space-scale-md); }
+.proto-ledger-card__title { font-size: var(--spyne-house-body-size); font-weight: 600; color: var(--spyne-text-default); }
+.proto-ledger-card__meta { font-family: var(--spyne-font-mono); font-size: var(--spyne-house-caption-size); color: var(--spyne-text-muted); margin-top: 2px; }
+.proto-ledger-card__amount { font-family: var(--spyne-font-mono); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--spyne-text-default); white-space: nowrap; }
+.proto-ledger-card__amount--credit { color: var(--spyne-text-success); }
+.proto-toolbar { display: flex; align-items: center; gap: var(--spyne-space-scale-sm); flex-wrap: wrap; padding: 0 var(--spyne-space-scale-lg) var(--spyne-space-scale-lg); }
+.proto-search { position: relative; flex: 1 1 220px; max-width: 280px; }
+.proto-search .material-symbols-outlined { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--spyne-icon-muted); font-size: 18px; }
+.proto-search input { width: 100%; padding-left: 34px; }
+.proto-ledger-toggle { display: inline-flex; align-items: center; gap: 4px; }
+</style>
+</head>
+<body>
+<div class="spyne-app">
+
+  <div class="proto-topbar">
+    <span class="proto-topbar__title">Wallet ops &middot; Spyne admin</span>
+    <span class="proto-topbar__avatar"></span>
+  </div>
+
+  <div class="proto-body">
+    <nav class="proto-sidebar">
+      <div class="proto-sidebar__group">
+        <div class="proto-sidebar__group-label">Wallet ops</div>
+        <a class="proto-sidebar__link proto-sidebar__link--active">Rooftop wallets</a>
+      </div>
+      <div class="proto-sidebar__group">
+        <div class="proto-sidebar__group-label">Config</div>
+        <a class="proto-sidebar__link">Price table</a>
+        <a class="proto-sidebar__link">Auto top-up rules</a>
+      </div>
+    </nav>
+
+    <main class="proto-main">
+      <div class="proto-container">
+        <div class="spyne-stack">
+
+          <div>
+            <span class="spyne-eyebrow">Wallet ops / Spyne admin &middot; Sunrise Auto Group</span>
+            <h1 class="spyne-hero-title" style="margin-top: 4px;">Rooftop wallets</h1>
+            <p class="spyne-body" style="margin-top: 6px;">Spyne-internal. Every rooftop wallet on this billing entity, whether its ledger agrees with the money that actually moved, and each rooftop's credit terms. Not visible to the rooftop.</p>
+          </div>
+
+          <div class="proto-kpi-row">
+
+            <div class="spyne-kpi-card">
+              <div class="spyne-kpi-card__head">
+                <span class="spyne-kpi-card__icon"><span class="material-symbols-outlined" style="font-size:20px;">account_balance_wallet</span></span>
+                <span class="spyne-kpi-card__title">Sum of wallet balances</span>
+              </div>
+              <div class="spyne-kpi-card__value">$486,320.00</div>
+              <hr class="spyne-kpi-card__div">
+              <div class="spyne-kpi-card__legend">Across 12 rooftops on this billing entity</div>
+            </div>
+
+            <div class="spyne-kpi-card">
+              <div class="spyne-kpi-card__head">
+                <span class="spyne-kpi-card__icon"><span class="material-symbols-outlined" style="font-size:20px;">account_balance</span></span>
+                <span class="spyne-kpi-card__title">Billing-entity health</span>
+              </div>
+              <div class="proto-status-value" style="color: var(--spyne-text-success);">
+                <span class="material-symbols-outlined" style="font-size:24px;">check_circle</span>
+                Healthy
+              </div>
+              <hr class="spyne-kpi-card__div">
+              <div class="spyne-kpi-card__legend">Wallet balances are fully covered by the billing entity&rsquo;s funds. The account balance itself isn&rsquo;t shown here.</div>
+            </div>
+
+            <div class="spyne-kpi-card">
+              <div class="spyne-kpi-card__head">
+                <span class="spyne-kpi-card__icon" style="background: var(--spyne-surface-bg-danger-subtle); color: var(--spyne-icon-danger);"><span class="material-symbols-outlined" style="font-size:20px;">flag</span></span>
+                <span class="spyne-kpi-card__title">Rooftops needing attention</span>
+              </div>
+              <div class="spyne-kpi-card__value">2 <span class="spyne-kpi-card__unit">of 12</span></div>
+              <hr class="spyne-kpi-card__div">
+              <div class="spyne-kpi-card__legend">See &ldquo;Needs attention&rdquo; below</div>
+            </div>
+
+          </div>
+
+          <div class="spyne-panel">
+            <div class="spyne-panel__header spyne-row" style="justify-content: space-between;">
+              <div>
+                <h2 class="spyne-card-title">Needs attention</h2>
+                <p class="spyne-caption" style="margin-top: 4px;">Rooftops with an open reconciliation flag, across all three checks. A flag stays open until support or finance clears it.</p>
+              </div>
+              <span class="spyne-badge spyne-badge--danger">2 open</span>
+            </div>
+            <div style="padding: 0 var(--spyne-space-scale-lg) var(--spyne-space-scale-lg);">
+              <div class="spyne-stack" style="gap: var(--spyne-space-scale-sm);">
+
+                <div class="spyne-list-row spyne-row-accent-danger">
+                  <span class="material-symbols-outlined" style="color: var(--spyne-icon-danger); font-size:20px;">flag</span>
+                  <div class="spyne-list-row__main">
+                    <div class="spyne-list-row__name">Sunrise Ford &middot; RT-04830: Recall reports a completed job with no matching ledger entry</div>
+                    <div class="spyne-list-row__meta">RCL-58390 &middot; completed Sep 9, 08:12 &middot; flagged 2 hours ago &middot; check: product events vs. ledger</div>
+                  </div>
+                  <div class="spyne-list-row__trailing">
+                    <span class="spyne-badge spyne-badge--danger">Open</span>
+                    <button class="spyne-btn-secondary-neutral spyne-btn--sm proto-view-rooftop" data-rooftop="RT-04830">Investigate</button>
+                  </div>
+                </div>
+
+                <div class="spyne-list-row spyne-row-accent-danger">
+                  <span class="material-symbols-outlined" style="color: var(--spyne-icon-danger); font-size:20px;">flag</span>
+                  <div class="spyne-list-row__main">
+                    <div class="spyne-list-row__name">Sunrise Nissan &middot; RT-04841: ledger doesn&rsquo;t match this rooftop&rsquo;s billing entity</div>
+                    <div class="spyne-list-row__meta">$92.00 drift &middot; flagged 5 hours ago &middot; check: ledger vs. billing entity</div>
+                  </div>
+                  <div class="spyne-list-row__trailing">
+                    <span class="spyne-badge spyne-badge--danger">Open</span>
+                    <button class="spyne-btn-secondary-neutral spyne-btn--sm proto-view-rooftop" data-rooftop="RT-04841">Investigate</button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          <div class="spyne-panel">
+            <div class="spyne-panel__header spyne-row" style="justify-content: space-between;">
+              <div>
+                <h2 class="spyne-card-title">All rooftop wallets</h2>
+                <p class="spyne-caption" style="margin-top: 4px;">Showing 6 of 12 rooftops on this billing entity, flagged rooftops first.</p>
+              </div>
+            </div>
+            <div class="proto-toolbar">
+              <div class="proto-search">
+                <span class="material-symbols-outlined">search</span>
+                <input class="spyne-input" type="text" id="rooftopSearch" placeholder="Search rooftop or ID" aria-label="Search rooftop or ID">
+              </div>
+              <div class="spyne-row" id="statusFilters" style="gap: 8px;">
+                <button class="spyne-chip" data-status="all" aria-pressed="true">All</button>
+                <button class="spyne-chip" data-status="attention" aria-pressed="false">Attention</button>
+                <button class="spyne-chip" data-status="matched" aria-pressed="false">Matched</button>
+              </div>
+            </div>
+            <div class="spyne-table-scroll">
+              <table class="spyne-table">
+                <thead>
+                  <tr>
+                    <th>Rooftop</th>
+                    <th class="spyne-table__num">Wallet balance</th>
+                    <th class="spyne-table__num">Negative-balance limit</th>
+                    <th>Reconciliation</th>
+                    <th>Last checked</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="rooftopTableBody">
+                  <tr class="proto-rooftop-row proto-view-rooftop" data-rooftop="RT-04830" data-status="attention" data-name="sunrise ford rt-04830">
+                    <td>Sunrise Ford <span class="spyne-caption">&middot; RT-04830</span></td>
+                    <td class="spyne-table__num">$612.25</td>
+                    <td class="spyne-table__num">&minus;$300.00</td>
+                    <td><span class="spyne-badge spyne-badge--danger">Attention</span></td>
+                    <td class="spyne-table__meta">Sep 9, 08:12</td>
+                    <td><button class="spyne-btn-secondary-neutral spyne-btn--sm">View</button></td>
+                  </tr>
+                  <tr class="proto-rooftop-row proto-view-rooftop" data-rooftop="RT-04841" data-status="attention" data-name="sunrise nissan rt-04841">
+                    <td>Sunrise Nissan <span class="spyne-caption">&middot; RT-04841</span></td>
+                    <td class="spyne-table__num">&minus;$180.00</td>
+                    <td class="spyne-table__num">&minus;$500.00</td>
+                    <td><span class="spyne-badge spyne-badge--danger">Attention</span></td>
+                    <td class="spyne-table__meta">Sep 9, 03:00</td>
+                    <td><button class="spyne-btn-secondary-neutral spyne-btn--sm">View</button></td>
+                  </tr>
+                  <tr class="proto-rooftop-row proto-view-rooftop" data-rooftop="RT-04821" data-status="matched" data-name="sunrise toyota rt-04821">
+                    <td>Sunrise Toyota <span class="spyne-caption">&middot; RT-04821</span></td>
+                    <td class="spyne-table__num">$2,091.50</td>
+                    <td class="spyne-table__num">&minus;$500.00</td>
+                    <td><span class="spyne-badge spyne-badge--success">Matched</span></td>
+                    <td class="spyne-table__meta">Sep 9, 06:00</td>
+                    <td><button class="spyne-btn-secondary-neutral spyne-btn--sm">View</button></td>
+                  </tr>
+                  <tr class="proto-rooftop-row proto-view-rooftop" data-rooftop="RT-04822" data-status="matched" data-name="sunrise honda rt-04822">
+                    <td>Sunrise Honda <span class="spyne-caption">&middot; RT-04822</span></td>
+                    <td class="spyne-table__num">$4,760.00</td>
+                    <td class="spyne-table__num">&minus;$750.00</td>
+                    <td><span class="spyne-badge spyne-badge--success">Matched</span></td>
+                    <td class="spyne-table__meta">Sep 9, 06:00</td>
+                    <td><button class="spyne-btn-secondary-neutral spyne-btn--sm">View</button></td>
+                  </tr>
+                  <tr class="proto-rooftop-row proto-view-rooftop" data-rooftop="RT-04852" data-status="matched" data-name="sunrise kia rt-04852">
+                    <td>Sunrise Kia <span class="spyne-caption">&middot; RT-04852</span></td>
+                    <td class="spyne-table__num">$1,325.75</td>
+                    <td class="spyne-table__num">&minus;$400.00</td>
+                    <td><span class="spyne-badge spyne-badge--success">Matched</span></td>
+                    <td class="spyne-table__meta">Sep 9, 06:00</td>
+                    <td><button class="spyne-btn-secondary-neutral spyne-btn--sm">View</button></td>
+                  </tr>
+                  <tr class="proto-rooftop-row proto-view-rooftop" data-rooftop="RT-04863" data-status="matched" data-name="sunrise subaru rt-04863">
+                    <td>Sunrise Subaru <span class="spyne-caption">&middot; RT-04863</span></td>
+                    <td class="spyne-table__num">$3,050.00</td>
+                    <td class="spyne-table__num">&minus;$600.00</td>
+                    <td><span class="spyne-badge spyne-badge--success">Matched</span></td>
+                    <td class="spyne-table__meta">Sep 9, 06:00</td>
+                    <td><button class="spyne-btn-secondary-neutral spyne-btn--sm">View</button></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="spyne-empty" id="rooftopEmpty" hidden>
+                <span class="material-symbols-outlined spyne-empty__icon" style="font-size:32px;">search_off</span>
+                <div class="spyne-empty__title">No rooftops match</div>
+                <div class="spyne-empty__body">Try a different search term or clear the status filter.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="spyne-backdrop" id="drawerBackdrop" hidden></div>
+  <div class="proto-drawer-wrap" id="drawerWrap" hidden>
+    <div class="spyne-drawer proto-drawer">
+      <div class="spyne-row" style="justify-content: space-between; align-items: flex-start;">
+        <div>
+          <span class="spyne-eyebrow">Rooftop wallet</span>
+          <h2 class="spyne-hero-title" style="margin-top: 4px;" id="drawerRooftopName">Sunrise Toyota</h2>
+          <p class="spyne-caption" style="margin-top: 4px;">
+            <span id="drawerRooftopId">RT-04821</span> &middot; balance <span id="drawerBalance" style="font-weight: 600; color: var(--spyne-text-default);">$2,091.50</span>
+          </p>
+        </div>
+        <button class="spyne-btn-ghost spyne-btn--sm" id="drawerCloseBtn" type="button" aria-label="Close" style="width: 40px; padding-inline: 0;">
+          <span class="material-symbols-outlined" style="font-size:20px;">close</span>
+        </button>
+      </div>
+
+      <hr class="proto-divider" style="margin: var(--spyne-space-scale-lg) 0;">
+
+      <div class="spyne-stack" style="gap: var(--spyne-space-scale-lg);">
+
+        <div class="proto-alert" id="drawerFlag" hidden>
+          <div class="spyne-row" style="align-items: flex-start; gap: 12px; flex-wrap: nowrap;">
+            <span class="material-symbols-outlined" style="color: var(--spyne-icon-danger); font-size:20px;">flag</span>
+            <div>
+              <div class="proto-alert__title" id="drawerFlagTitle"></div>
+              <div class="proto-alert__subtitle" id="drawerFlagSubtitle"></div>
+            </div>
+          </div>
+          <hr class="proto-alert__div">
+          <div class="proto-alert__meta-grid" id="drawerFlagMeta"></div>
+        </div>
+
+        <div>
+          <div class="spyne-row" style="justify-content: space-between;">
+            <label style="font-size: var(--spyne-house-body-size); font-weight: 700; color: var(--spyne-text-default);">Negative-balance limit</label>
+            <span class="spyne-caption" id="negLimitSummary">Currently &minus;$500.00</span>
+          </div>
+          <div class="spyne-row" style="align-items: center; gap: 8px; margin-top: 8px;">
+            <div class="proto-currency-input">
+              <span class="proto-currency-input__prefix">&minus;$</span>
+              <input type="number" id="negLimitInput" value="500" min="0" step="50">
+            </div>
+            <button class="spyne-btn-secondary-neutral spyne-btn--sm" id="saveNegLimitBtn" type="button">Save</button>
+          </div>
+        </div>
+
+        <hr class="proto-divider">
+
+        <div>
+          <h3 class="spyne-card-title" style="font-size: var(--spyne-body-sm-size);">Issue manual adjustment</h3>
+          <p class="spyne-caption" style="margin-top: 4px;">Corrects this rooftop&rsquo;s wallet directly, outside the normal product or deposit flow.</p>
+          <div class="spyne-row" style="gap: 8px; margin-top: 8px;">
+            <span class="proto-code-chip">event_type = manual_adjustment</span>
+            <span class="proto-code-chip">source = ops_manual_credit</span>
+          </div>
+          <div class="spyne-stack" style="gap: var(--spyne-space-scale-md); margin-top: var(--spyne-space-scale-md);">
+
+            <div class="proto-field">
+              <label>Direction</label>
+              <div class="spyne-segmented" id="adjDirection">
+                <button class="spyne-segmented__btn" data-direction="credit" aria-pressed="true">Credit (add)</button>
+                <button class="spyne-segmented__btn" data-direction="debit" aria-pressed="false">Debit (remove)</button>
+              </div>
+            </div>
+
+            <div class="spyne-row" style="align-items: flex-end;">
+              <div class="proto-field" style="flex: 1 1 120px;">
+                <label for="adjAmount">Amount</label>
+                <input class="spyne-input" type="number" id="adjAmount" value="50" min="1" step="1">
+              </div>
+              <div class="proto-field" style="flex: 2 1 200px;">
+                <label for="adjRemarks">Reason</label>
+                <input class="spyne-input" type="text" id="adjRemarks" value="Correction, duplicate credit reversed" placeholder="Reason for this adjustment">
+              </div>
+            </div>
+
+            <div class="spyne-row" style="gap: var(--spyne-space-scale-md);">
+              <button class="spyne-btn-primary spyne-btn--sm" id="adjBtn" type="button">Post adjustment</button>
+              <span class="spyne-caption" id="adjPreview" style="font-weight: 600; color: var(--spyne-text-default);">New balance $2,091.50</span>
+            </div>
+
+          </div>
+        </div>
+
+        <hr class="proto-divider">
+
+        <div>
+          <button class="spyne-btn-link" id="drawerLedgerToggle" type="button">Show ledger</button>
+          <div class="spyne-stack" id="ledgerRecent" style="gap: var(--spyne-space-scale-sm); margin-top: var(--spyne-space-scale-md);"></div>
+          <div class="spyne-stack" id="ledgerOlder" style="gap: var(--spyne-space-scale-sm); margin-top: var(--spyne-space-scale-sm);" hidden></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ROOFTOPS = {
+    'RT-04830': { name: 'Sunrise Ford', balance: 612.25, negLimit: 300, status: 'attention',
+      flag: { title: 'Recall reports a completed job with no matching ledger entry', subtitle: 'Check product events against the ledger before adjusting.',
+        meta: [ { label: 'Job', value: 'RCL-58390' }, { label: 'Completed', value: 'Sep 9, 08:12' }, { label: 'Flagged', value: '2 hours ago' } ] },
+      ledger: {
+        recent: [
+          { orderId: 'ORD-58401', title: 'Recall outreach · 4 appointments', source: 'recall', date: 'Sep 9, 07:40', amount: 152.00, direction: 'debit' },
+          { orderId: 'TOPUP-58380', title: 'Deposit', source: 'rooftop_manual_deposit', date: 'Sep 5, 09:00', amount: 500.00, direction: 'credit' },
+          { orderId: 'ORD-58360', title: 'Recall outreach · 2 appointments', source: 'recall', date: 'Sep 3, 15:12', amount: 76.00, direction: 'debit' },
+        ],
+        older: [
+          { orderId: 'ORD-58300', title: 'Recall outreach · 2 appointments', source: 'recall', date: 'Aug 28, 11:05', amount: 76.00, direction: 'debit' },
+          { orderId: 'TOPUP-58280', title: 'Deposit', source: 'rooftop_manual_deposit', date: 'Aug 20, 09:00', amount: 400.00, direction: 'credit' },
+        ],
+      } },
+    'RT-04841': { name: 'Sunrise Nissan', balance: -180.00, negLimit: 500, status: 'attention',
+      flag: { title: 'Ledger doesn’t match this rooftop’s billing entity', subtitle: 'Confirm the drift with finance before adjusting.',
+        meta: [ { label: 'Drift', value: '$92.00' }, { label: 'Check', value: 'Ledger vs. billing entity' }, { label: 'Flagged', value: '5 hours ago' } ] },
+      ledger: {
+        recent: [
+          { orderId: 'ORD-58412', title: 'Recall outreach · 6 appointments', source: 'recall', date: 'Sep 9, 02:10', amount: 228.00, direction: 'debit' },
+          { orderId: 'ADJ-1190', title: 'Manual adjustment', source: 'ops_manual_credit', date: 'Sep 6, 14:00', amount: 40.00, direction: 'credit' },
+          { orderId: 'ORD-58370', title: 'Recall outreach · 3 appointments', source: 'recall', date: 'Sep 2, 10:30', amount: 114.00, direction: 'debit' },
+        ],
+        older: [
+          { orderId: 'TOPUP-58290', title: 'Deposit', source: 'rooftop_manual_deposit', date: 'Aug 25, 09:00', amount: 250.00, direction: 'credit' },
+          { orderId: 'ORD-58250', title: 'Recall outreach · 5 appointments', source: 'recall', date: 'Aug 19, 16:45', amount: 190.00, direction: 'debit' },
+        ],
+      } },
+    'RT-04821': { name: 'Sunrise Toyota', balance: 2091.50, negLimit: 500, status: 'matched', flag: null,
+      ledger: {
+        recent: [
+          { orderId: 'ADJ-1187', title: 'Correction, duplicate credit reversed from the August cycle', source: 'ops_manual_credit', date: 'Sep 9, 08:00', amount: 18.50, direction: 'debit' },
+          { orderId: 'ORD-58231', title: 'Recall outreach completed, VIN 2T1BURHE0JC012345, appointment booked', source: 'recall', date: 'Sep 8, 10:41', amount: 45.00, direction: 'debit' },
+          { orderId: 'ORD-57990-R', title: 'Appointment cancelled by owner inside the claim window', source: 'recall', date: 'Sep 5, 15:03', amount: 45.00, direction: 'credit', refOrderId: 'ORD-57990' },
+        ],
+        older: [
+          { orderId: 'ORD-58042', title: 'Recall outreach completed, VIN 5TDZA23C13S012345, appointment booked', source: 'recall', date: 'Sep 4, 09:52', amount: 45.00, direction: 'debit' },
+          { orderId: 'ORD-57990', title: 'Recall outreach completed, VIN 1FTFW1E85MFA12345, owner reached, appointment booked', source: 'recall', date: 'Sep 3, 11:20', amount: 45.00, direction: 'debit' },
+          { orderId: 'TOPUP-2209', title: 'Monthly wallet top-up, ACH from Sunrise Auto Group', source: 'rooftop_manual_deposit', date: 'Sep 1, 09:14', amount: 1000.00, direction: 'credit' },
+        ],
+      } },
+    'RT-04822': { name: 'Sunrise Honda', balance: 4760.00, negLimit: 750, status: 'matched', flag: null,
+      ledger: {
+        recent: [
+          { orderId: 'ORD-58420', title: 'Recall outreach · 8 appointments', source: 'recall', date: 'Sep 9, 09:15', amount: 304.00, direction: 'debit' },
+          { orderId: 'TOPUP-58390', title: 'Deposit', source: 'rooftop_manual_deposit', date: 'Sep 4, 09:00', amount: 1500.00, direction: 'credit' },
+          { orderId: 'ORD-58330', title: 'Recall outreach · 5 appointments', source: 'recall', date: 'Aug 30, 11:00', amount: 190.00, direction: 'debit' },
+        ],
+        older: [
+          { orderId: 'TOPUP-58260', title: 'Deposit', source: 'rooftop_manual_deposit', date: 'Aug 18, 09:00', amount: 1200.00, direction: 'credit' },
+          { orderId: 'ORD-58210', title: 'Recall outreach · 4 appointments', source: 'recall', date: 'Aug 10, 14:20', amount: 152.00, direction: 'debit' },
+        ],
+      } },
+    'RT-04852': { name: 'Sunrise Kia', balance: 1325.75, negLimit: 400, status: 'matched', flag: null,
+      ledger: {
+        recent: [
+          { orderId: 'ORD-58405', title: 'Recall outreach · 3 appointments', source: 'recall', date: 'Sep 9, 08:50', amount: 114.00, direction: 'debit' },
+          { orderId: 'TOPUP-58340', title: 'Auto top-up', source: 'auto_topup_rule', date: 'Sep 2, 09:00', amount: 600.00, direction: 'credit' },
+          { orderId: 'ORD-58310', title: 'Recall outreach · 2 appointments', source: 'recall', date: 'Aug 27, 12:05', amount: 76.00, direction: 'debit' },
+        ],
+        older: [
+          { orderId: 'TOPUP-58270', title: 'Auto top-up', source: 'auto_topup_rule', date: 'Aug 15, 09:00', amount: 500.00, direction: 'credit' },
+          { orderId: 'ORD-58220', title: 'Recall outreach · 3 appointments', source: 'recall', date: 'Aug 8, 10:40', amount: 114.00, direction: 'debit' },
+        ],
+      } },
+    'RT-04863': { name: 'Sunrise Subaru', balance: 3050.00, negLimit: 600, status: 'matched', flag: null,
+      ledger: {
+        recent: [
+          { orderId: 'ORD-58410', title: 'Recall outreach · 5 appointments', source: 'recall', date: 'Sep 9, 07:05', amount: 190.00, direction: 'debit' },
+          { orderId: 'TOPUP-58350', title: 'Deposit', source: 'rooftop_manual_deposit', date: 'Sep 3, 09:00', amount: 1000.00, direction: 'credit' },
+          { orderId: 'ORD-58320', title: 'Recall outreach · 4 appointments', source: 'recall', date: 'Aug 29, 13:50', amount: 152.00, direction: 'debit' },
+        ],
+        older: [
+          { orderId: 'TOPUP-58240', title: 'Deposit', source: 'rooftop_manual_deposit', date: 'Aug 16, 09:00', amount: 900.00, direction: 'credit' },
+          { orderId: 'ORD-58230', title: 'Recall outreach · 3 appointments', source: 'recall', date: 'Aug 9, 11:15', amount: 114.00, direction: 'debit' },
+        ],
+      } },
+  };
+
+  function money(n) {
+    return '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function signedMoney(n) {
+    return (n < 0 ? '−' : '') + money(n);
+  }
+  function ledgerCardHtml(entry) {
+    var isCredit = entry.direction === 'credit';
+    var refLine = entry.refOrderId ? '<div class="proto-ledger-card__meta">refunds <span class="proto-order-id">' + entry.refOrderId + '</span></div>' : '';
+    return '<div class="proto-ledger-card">' +
+      '<div class="spyne-row" style="justify-content: space-between; align-items: flex-start; flex-wrap: nowrap;">' +
+        '<div>' +
+          '<div class="proto-ledger-card__title"><span class="proto-order-id">' + entry.orderId + '</span> &middot; ' + entry.title + '</div>' +
+          '<div class="proto-ledger-card__meta">' + entry.source + ' &middot; ' + entry.date + '</div>' +
+          refLine +
+        '</div>' +
+        '<div class="proto-ledger-card__amount' + (isCredit ? ' proto-ledger-card__amount--credit' : '') + '">' + (isCredit ? '+' : '&minus;') + money(entry.amount) + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  var drawerBackdrop = document.getElementById('drawerBackdrop');
+  var drawerWrap = document.getElementById('drawerWrap');
+  var drawerRooftopName = document.getElementById('drawerRooftopName');
+  var drawerRooftopId = document.getElementById('drawerRooftopId');
+  var drawerBalance = document.getElementById('drawerBalance');
+  var drawerFlag = document.getElementById('drawerFlag');
+  var drawerFlagTitle = document.getElementById('drawerFlagTitle');
+  var drawerFlagSubtitle = document.getElementById('drawerFlagSubtitle');
+  var drawerFlagMeta = document.getElementById('drawerFlagMeta');
+  var negLimitInput = document.getElementById('negLimitInput');
+  var negLimitSummary = document.getElementById('negLimitSummary');
+  var ledgerRecent = document.getElementById('ledgerRecent');
+  var ledgerOlder = document.getElementById('ledgerOlder');
+  var ledgerToggle = document.getElementById('drawerLedgerToggle');
+  var adjAmount = document.getElementById('adjAmount');
+  var adjRemarks = document.getElementById('adjRemarks');
+  var adjDirection = document.getElementById('adjDirection');
+  var adjPreview = document.getElementById('adjPreview');
+  var currentBalance = 0;
+
+  function updatePreview() {
+    var direction = adjDirection.querySelector('[aria-pressed="true"]').getAttribute('data-direction');
+    var amt = parseFloat(adjAmount.value) || 0;
+    var preview = currentBalance + (direction === 'credit' ? amt : -amt);
+    adjPreview.textContent = 'New balance ' + signedMoney(preview);
+  }
+
+  function openDrawer(id) {
+    var r = ROOFTOPS[id];
+    if (!r) { return; }
+    currentBalance = r.balance;
+    drawerRooftopName.textContent = r.name;
+    drawerRooftopId.textContent = id;
+    drawerBalance.textContent = signedMoney(r.balance);
+    negLimitInput.value = r.negLimit;
+    negLimitSummary.textContent = 'Currently −' + money(r.negLimit);
+
+    if (r.flag) {
+      drawerFlagTitle.textContent = r.flag.title;
+      drawerFlagSubtitle.textContent = r.flag.subtitle;
+      drawerFlagMeta.innerHTML = r.flag.meta.map(function (m) {
+        return '<div><span class="proto-alert__meta-label">' + m.label + '</span><div class="proto-alert__meta-value">' + m.value + '</div></div>';
+      }).join('');
+      drawerFlag.hidden = false;
+    } else {
+      drawerFlag.hidden = true;
+    }
+
+    ledgerRecent.innerHTML = r.ledger.recent.map(ledgerCardHtml).join('');
+    ledgerOlder.innerHTML = r.ledger.older.map(ledgerCardHtml).join('');
+    ledgerOlder.hidden = true;
+    ledgerToggle.textContent = 'Show ledger';
+
+    adjDirection.querySelectorAll('.spyne-segmented__btn').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-direction') === 'credit' ? 'true' : 'false'); });
+    adjAmount.value = 50;
+    adjRemarks.value = 'Correction, duplicate credit reversed';
+    updatePreview();
+
+    drawerBackdrop.hidden = false;
+    drawerWrap.hidden = false;
+  }
+
+  function closeDrawer() {
+    drawerBackdrop.hidden = true;
+    drawerWrap.hidden = true;
+  }
+
+  document.querySelectorAll('.proto-view-rooftop').forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      var target = e.target.closest('[data-rooftop]');
+      if (!target) { return; }
+      openDrawer(target.getAttribute('data-rooftop'));
+    });
+  });
+  drawerBackdrop.addEventListener('click', closeDrawer);
+  document.getElementById('drawerCloseBtn').addEventListener('click', closeDrawer);
+
+  var rooftopSearch = document.getElementById('rooftopSearch');
+  var statusFilters = document.getElementById('statusFilters');
+  var rooftopRows = document.querySelectorAll('#rooftopTableBody tr');
+  var rooftopEmpty = document.getElementById('rooftopEmpty');
+
+  function applyRooftopFilters() {
+    var query = rooftopSearch.value.trim().toLowerCase();
+    var status = statusFilters.querySelector('[aria-pressed="true"]').getAttribute('data-status');
+    var visibleCount = 0;
+    rooftopRows.forEach(function (row) {
+      var matchesQuery = !query || row.getAttribute('data-name').indexOf(query) !== -1;
+      var matchesStatus = status === 'all' || row.getAttribute('data-status') === status;
+      var show = matchesQuery && matchesStatus;
+      row.hidden = !show;
+      if (show) { visibleCount += 1; }
+    });
+    rooftopEmpty.hidden = visibleCount > 0;
+  }
+
+  rooftopSearch.addEventListener('input', applyRooftopFilters);
+  statusFilters.querySelectorAll('.spyne-chip').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      statusFilters.querySelectorAll('.spyne-chip').forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
+      chip.setAttribute('aria-pressed', 'true');
+      applyRooftopFilters();
+    });
+  });
+
+  ledgerToggle.addEventListener('click', function () {
+    var willShow = ledgerOlder.hidden;
+    ledgerOlder.hidden = !willShow;
+    ledgerToggle.textContent = willShow ? 'Hide ledger' : 'Show ledger';
+  });
+
+  var saveNegLimitBtn = document.getElementById('saveNegLimitBtn');
+  saveNegLimitBtn.addEventListener('click', function () {
+    var val = parseFloat(negLimitInput.value) || 0;
+    negLimitSummary.textContent = 'Currently −$' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  });
+
+  adjDirection.querySelectorAll('.spyne-segmented__btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      adjDirection.querySelectorAll('.spyne-segmented__btn').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+      btn.setAttribute('aria-pressed', 'true');
+      updatePreview();
+    });
+  });
+  adjAmount.addEventListener('input', updatePreview);
+
+  var adjBtn = document.getElementById('adjBtn');
+  var adjCounter = 1191;
+
+  adjBtn.addEventListener('click', function () {
+    var direction = adjDirection.querySelector('[aria-pressed="true"]').getAttribute('data-direction');
+    var amt = parseFloat(adjAmount.value) || 0;
+    if (amt <= 0) { return; }
+    currentBalance += direction === 'credit' ? amt : -amt;
+    adjCounter += 1;
+
+    ledgerRecent.insertAdjacentHTML('afterbegin', ledgerCardHtml({
+      orderId: 'ADJ-' + adjCounter, title: 'Manual adjustment', source: 'ops_manual_credit', date: 'Just now', amount: amt, direction: direction,
+    }));
+    drawerBalance.textContent = signedMoney(currentBalance);
+
+    adjAmount.value = '';
+    adjRemarks.value = '';
+    updatePreview();
+  });
+})();
+</script>
+</body>
+</html>
